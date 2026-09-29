@@ -15,12 +15,12 @@ export function WelcomeView({ table, onEnter }: WelcomeViewProps) {
   const tableLabel = areaKey ? `${table} · ${t(areaKey)}` : table
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-rice-100 paper-noise">
-      <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-chili-100 blur-3xl" />
-      <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-amber-100 blur-3xl" />
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-rice-100 paper-noise dark:bg-dark-bg">
+      <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-chili-100 blur-3xl dark:bg-chili-500/10" />
+      <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-amber-100 blur-3xl dark:bg-amber-500/10" />
 
       <div className="relative mx-auto w-full max-w-md px-5 py-10">
-        <section className="animate-rise overflow-hidden rounded-3xl border border-white/80 bg-white/90 shadow-float backdrop-blur">
+        <section className="animate-rise overflow-hidden rounded-3xl border border-white/80 bg-white/90 shadow-float backdrop-blur dark:border-dark-text/10 dark:bg-dark-surface/90 dark:shadow-dark-float">
           {/* 门店图片 */}
           <div className="relative h-48 overflow-hidden sm:h-56">
             <img src={hotpot} alt={t('welcome.img_alt')} className="h-full w-full object-cover" />
@@ -39,13 +39,13 @@ export function WelcomeView({ table, onEnter }: WelcomeViewProps) {
 
           {/* 问候语 */}
           <div className="px-6 py-8 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-chili-500/20 bg-chili-50 px-3 py-1.5 text-xs font-bold text-chili-600">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-chili-500/20 bg-chili-50 px-3 py-1.5 text-xs font-bold text-chili-600 dark:bg-chili-500/20 dark:text-chili-400">
               <Sparkles size={13} /> {t('welcome.badge')}
             </div>
-            <h1 className="text-3xl font-extrabold leading-tight text-charcoal-900 sm:text-4xl">
+            <h1 className="text-3xl font-extrabold leading-tight text-charcoal-900 sm:text-4xl dark:text-dark-text">
               {t('welcome.title')}
             </h1>
-            <p className="mt-3 flex items-center justify-center gap-1.5 text-base font-semibold text-charcoal-500">
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-base font-semibold text-charcoal-500 dark:text-dark-muted">
               <MapPin size={16} className="text-chili-500" />
               {t('welcome.you_at')} {tableLabel}
             </p>

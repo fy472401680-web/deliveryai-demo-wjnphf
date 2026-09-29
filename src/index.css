@@ -10,6 +10,10 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #fbf5ea; }
 button, input { font: inherit; }
 ::selection { background: #ffddd8; color: #a9231a; }
 
+/* 黑夜模式基础 */
+.dark, .dark :root, .dark body { color: #f5f3ef; background: #1c1917; }
+.dark ::selection { background: #a9231a; color: #ffddd8; }
+
 /* 老人模式全局基础：放大字号约 1.25 倍 */
 .elderly { font-size: 125%; }
 
@@ -28,6 +32,11 @@ html * {
   transition-property: background-color, border-color, color, fill, stroke, font-size;
   transition-duration: 250ms;
   transition-timing-function: ease;
+}
+
+/* 黑夜模式下隐藏纸纹背景 */
+.dark .paper-noise {
+  background-image: none;
 }
 
 @layer utilities {

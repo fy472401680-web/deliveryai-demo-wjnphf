@@ -15,6 +15,15 @@
         } catch (e) {
           // localStorage 不可用时保持默认中文
         }
+        // 黑夜模式：在 React 渲染前从 localStorage 读取并设置 class，防止闪烁
+        try {
+          var darkMode = localStorage.getItem('dark-mode');
+          if (darkMode === 'true') {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {
+          // localStorage 不可用时忽略
+        }
       })();
     </script>
   </head>

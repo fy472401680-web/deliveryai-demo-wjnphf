@@ -36,11 +36,11 @@ test.describe('车机AI对话助手 - 空态与引导', () => {
     await expect(wolfSvg(page)).not.toHaveClass(/listening|thinking|responding|confused/)
 
     // 引导卡片可见
-    await expect(page.locator('.guide-card')).toBeVisible()
-    await expect(page.locator('.guide-title')).toContainText('试试对我说')
+    await expect(page.locator('.guide-card').first()).toBeVisible()
+    await expect(page.locator('.guide-title').first()).toContainText('试试对我说')
 
     // 引导标签覆盖四类场景
-    const tags = page.locator('.guide-tag')
+    const tags = page.locator('.dialog-guide .guide-tag')
     await expect(tags).toHaveCount(4)
     await expect(tags.nth(0)).toContainText('导航去公司')
     await expect(tags.nth(1)).toContainText('播放周杰伦的歌')
@@ -54,26 +54,26 @@ test.describe('车机AI对话助手 - 空态与引导', () => {
 
   test('引导标签点击触发导航卡片', async ({ page }) => {
     await enterAssistant(page)
-    await page.locator('.guide-tag', { hasText: '导航去公司' }).click()
-    await expect(page.locator('.card.map-card')).toBeVisible()
+    await page.locator('.guide-tag', { hasText: '导航去公司' }).first().click()
+    await expect(page.locator('.card-area .card.map-card')).toBeVisible()
   })
 
   test('引导标签点击触发音乐卡片', async ({ page }) => {
     await enterAssistant(page)
-    await page.locator('.guide-tag', { hasText: '播放周杰伦的歌' }).click()
-    await expect(page.locator('.card.music-card')).toBeVisible()
+    await page.locator('.guide-tag', { hasText: '播放周杰伦的歌' }).first().click()
+    await expect(page.locator('.card-area .card.music-card')).toBeVisible()
   })
 
   test('引导标签点击触发空调卡片', async ({ page }) => {
     await enterAssistant(page)
-    await page.locator('.guide-tag', { hasText: '空调调到 24 度' }).click()
-    await expect(page.locator('.card.ac-card')).toBeVisible()
+    await page.locator('.guide-tag', { hasText: '空调调到 24 度' }).first().click()
+    await expect(page.locator('.card-area .card.ac-card')).toBeVisible()
   })
 
   test('引导标签点击触发天气卡片', async ({ page }) => {
     await enterAssistant(page)
-    await page.locator('.guide-tag', { hasText: '今天天气怎么样' }).click()
-    await expect(page.locator('.card.info-card')).toBeVisible()
+    await page.locator('.guide-tag', { hasText: '今天天气怎么样' }).first().click()
+    await expect(page.locator('.card-area .card.info-card')).toBeVisible()
   })
 })
 
@@ -104,7 +104,7 @@ test.describe('车机AI对话助手 - 对话消息气泡', () => {
 
   test('REQ-002.2: 引导标签点击后生成消息气泡', async ({ page }) => {
     await enterAssistant(page)
-    await page.locator('.guide-tag', { hasText: '导航去公司' }).click()
+    await page.locator('.guide-tag', { hasText: '导航去公司' }).first().click()
     // 用户消息和助手消息都应出现
     await expect(page.locator('.msg-user')).toBeVisible()
     await expect(page.locator('.msg-assistant')).toBeVisible()
@@ -160,7 +160,7 @@ test.describe('车机AI对话助手 - 思考态与打字指示器', () => {
     await expect(page.locator('.typing-indicator')).toBeVisible({ timeout: 1000 })
     // 最终打字指示器消失，显示结果
     await expect(page.locator('.typing-indicator')).not.toBeVisible({ timeout: 3000 })
-    await expect(page.locator('.card.map-card')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.card-area .card.map-card')).toBeVisible({ timeout: 3000 })
   })
 })
 
@@ -201,7 +201,7 @@ test.describe('车机AI对话助手 - 助手形象状态', () => {
     await enterAssistant(page)
     await demoBtn(page, '困惑').click()
     await expect(wolfSvg(page)).toHaveClass(/confused/)
-    await expect(page.locator('.guide-card')).toContainText('暂时不理解')
+    await expect(page.locator('.guide-card').first()).toContainText('暂时不理解')
   })
 })
 
@@ -221,28 +221,28 @@ test.describe('车机AI对话助手 - 文字输入场景', () => {
     await textInput(page).fill('导航去公司')
     await textInput(page).press('Enter')
     // 等待思考延迟（800ms）和卡片渐入（400ms）
-    await expect(page.locator('.card.map-card')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.card-area .card.map-card')).toBeVisible({ timeout: 3000 })
   })
 
   test('REQ-004.2: 文字输入"播放周杰伦的歌"显示音乐卡片', async ({ page }) => {
     await enterAssistant(page)
     await textInput(page).fill('播放周杰伦的歌')
     await textInput(page).press('Enter')
-    await expect(page.locator('.card.music-card')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.card-area .card.music-card')).toBeVisible({ timeout: 3000 })
   })
 
   test('REQ-004.3: 文字输入"空调调到24度"显示空调卡片', async ({ page }) => {
     await enterAssistant(page)
     await textInput(page).fill('空调调到24度')
     await textInput(page).press('Enter')
-    await expect(page.locator('.card.ac-card')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.card-area .card.ac-card')).toBeVisible({ timeout: 3000 })
   })
 
   test('REQ-004.4: 文字输入"今天天气怎么样"显示天气卡片', async ({ page }) => {
     await enterAssistant(page)
     await textInput(page).fill('今天天气怎么样')
     await textInput(page).press('Enter')
-    await expect(page.locator('.card.info-card')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.card-area .card.info-card')).toBeVisible({ timeout: 3000 })
   })
 
   test('REQ-004.5: 未知意图显示困惑引导', async ({ page }) => {
@@ -262,7 +262,7 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
   test('REQ-005: 导航卡片含路线概览/ETA/距离/出发按钮', async ({ page }) => {
     await enterAssistant(page)
     await demoBtn(page, '导航').click()
-    const navCard = page.locator('.card.map-card')
+    const navCard = page.locator('.card-area .card.map-card')
     await expect(navCard).toBeVisible()
 
     // 目的地
@@ -278,7 +278,7 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
   test('REQ-006: 音乐卡片含封面/歌名/进度条/控制按钮', async ({ page }) => {
     await enterAssistant(page)
     await demoBtn(page, '音乐').click()
-    const musicCard = page.locator('.card.music-card')
+    const musicCard = page.locator('.card-area .card.music-card')
     await expect(musicCard).toBeVisible()
 
     // 封面区域
@@ -299,7 +299,7 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
   test('REQ-007: 空调卡片含温度数值/风量图标/模式图标', async ({ page }) => {
     await enterAssistant(page)
     await demoBtn(page, '空调').click()
-    const acCard = page.locator('.card.ac-card')
+    const acCard = page.locator('.card-area .card.ac-card')
     await expect(acCard).toBeVisible()
 
     // 温度显示
@@ -317,7 +317,7 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
   test('REQ-008: 天气卡片含城市/温度/天气图标/描述', async ({ page }) => {
     await enterAssistant(page)
     await demoBtn(page, '天气').click()
-    const weatherCard = page.locator('.card.info-card')
+    const weatherCard = page.locator('.card-area .card.info-card')
     await expect(weatherCard).toBeVisible()
 
     // 天气图标
@@ -365,7 +365,7 @@ test.describe('车机AI对话助手 - 麦克风与倾听', () => {
 
     // 应回到待机态，显示引导卡片
     await expect(wolfSvg(page)).not.toHaveClass(/listening|thinking|responding|confused/)
-    await expect(page.locator('.guide-card')).toBeVisible()
+    await expect(page.locator('.guide-card').first()).toBeVisible()
   })
 })
 
@@ -426,7 +426,7 @@ test.describe('车机AI对话助手 - 演示控制面板', () => {
     // 思考 -> 导航
     await demoBtn(page, '导航').click()
     await expect(wolfSvg(page)).toHaveClass(/responding/)
-    await expect(page.locator('.card.map-card')).toBeVisible()
+    await expect(page.locator('.card-area .card.map-card')).toBeVisible()
   })
 })
 

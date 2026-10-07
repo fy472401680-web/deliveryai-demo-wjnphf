@@ -3,6 +3,7 @@ import i18next from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { ClipboardList, ConciergeBell, LayoutDashboard, Menu as MenuIcon, ShoppingBasket } from 'lucide-react'
 import { HomeView } from '@/components/HomeView'
+import CarAssistantView from '@/components/CarAssistantView'
 import { WelcomeView } from '@/components/WelcomeView'
 import { CartPanel } from '@/components/CartPanel'
 import { CheckoutView } from '@/components/CheckoutView'
@@ -87,12 +88,16 @@ export default function App() {
   }
 
   if (state.view === 'home' || !state.table) {
-    return <HomeView onBind={(table) => dispatch({ type: 'BIND_TABLE', table })} />
+    return <HomeView onBind={(table) => dispatch({ type: 'BIND_TABLE', table })} onCarAssistant={() => dispatch({ type: 'SET_VIEW', view: 'car-assistant' })} />
   }
 
   if (state.view === 'welcome') {
     return <WelcomeView table={state.table!} onEnter={() => dispatch({ type: 'SET_VIEW', view: 'menu' })} />
   }
+  if (state.view === 'car-assistant') {
+    return <CarAssistantView />
+  }
+
 
   return (
     <div className="min-h-screen bg-rice-100 paper-noise">

@@ -1,3 +1,4 @@
+import { Bot, MessageSquare} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronRight, MapPin, QrCode, Sparkles, Users } from 'lucide-react'
 import hotpot from '@/assets/hotpot.jpg'
@@ -12,12 +13,12 @@ const tableOptions = [
   { code: 'D03', areaKey: 'bind.area.window', seats: 6 },
 ]
 
-interface HomeViewProps { onBind: (table: string) => void }
+interface HomeViewProps { onBind: (table: string) => void; onCarAssistant?: () => void }
 
-export function HomeView({ onBind }: HomeViewProps) {
+export function HomeView({ onBind, onCarAssistant }: HomeViewProps) {
   const { t } = useTranslation()
   const recommended = getRecommendedProducts()
-  return (
+  return (<>
     <main className="relative overflow-hidden bg-rice-100 paper-noise">
       <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-chili-100 blur-3xl" />
       <div className="absolute -bottom-24 -left-20 h-72 w-72 rounded-full bg-amber-100 blur-3xl" />
@@ -98,5 +99,32 @@ export function HomeView({ onBind }: HomeViewProps) {
         )}
       </section>
     </main>
-  )
+
+      {/* ─── 车机 AI 对话助手入口 ─── */}
+      <section className="relative mx-auto w-full max-w-6xl px-5 pb-6 lg:px-10">
+        <button
+          onClick={onCarAssistant}
+          className="group relative w-full overflow-hidden rounded-3xl border border-rice-200/80 bg-gradient-to-br from-chili-50 via-white to-amber-50 p-5 text-left shadow-card transition hover:-translate-y-1 hover:shadow-float sm:p-6"
+        >
+          <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br from-chili-500/10 to-amber-500/10 blur-2xl" />
+          <div className="relative flex items-center gap-4">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-chili-500 to-amber-500 text-2xl text-white shadow-lg transition group-hover:scale-105">
+              <Bot size={28} />
+            </span>
+            <div className="flex-1">
+              <h3 className="text-lg font-extrabold text-charcoal-900">小狼助手 · 车机 AI 对话</h3>
+              <p className="mt-1 text-sm text-charcoal-500">试试对我说：导航去公司 / 播放周杰伦 / 打开空调 / 今天天气怎么样</p>
+            </div>
+            <span className="hidden items-center gap-1 rounded-full bg-chili-500 px-4 py-2 text-sm font-bold text-white transition group-hover:bg-chili-600 sm:flex">
+              <MessageSquare size={16} /> 开始体验
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {['🗺 导航', '🎵 音乐', '❄️ 空调', '🌤 天气'].map((tag) => (
+              <span key={tag} className="rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-charcoal-500 shadow-sm backdrop-blur">{tag}</span>
+            ))}
+          </div>
+        </button>
+      </section>
+  </>)
 }

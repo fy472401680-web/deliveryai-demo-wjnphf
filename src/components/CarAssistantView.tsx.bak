@@ -4,24 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 type WolfState = 'idle' | 'listening' | 'thinking' | 'responding' | 'confused'
 type CardType = 'nav' | 'music' | 'ac' | 'weather' | 'guide' | 'confused' | null
 
-interface ConvEntry {
-  role: 'user' | 'assistant'
-  text: string
-  cardType?: CardType
-  ts: number
-}
-
-interface DialogContext {
-  lastIntent: CardType
-  lastDestination?: string
-  lastSong?: string
-  lastArtist?: string
-  lastTemp?: number
-  lastCity?: string
-}
-
-const DEFAULT_CONTEXT: DialogContext = { lastIntent: null }
-
 // ─── 模拟响应数据 ───
 const MOCK_RESPONSES: Record<string, { type: CardType; label: string }> = {
   nav: { type: 'nav', label: '🗺 已规划路线' },
@@ -30,39 +12,13 @@ const MOCK_RESPONSES: Record<string, { type: CardType; label: string }> = {
   weather: { type: 'weather', label: '☀️ 今日天气' },
 }
 
-function matchIntent(text: string, ctx?: DialogContext): CardType {
+function matchIntent(text: string): CardType {
   const t = text.toLowerCase()
-  // 上下文感知：换一个、改去、不去等
-  if (ctx && ctx.lastIntent) {
-    if (/换(一个|地方|首歌|成)|改[成去]|不(去|要|是)|别的|其他|重新/.test(t)) {
-      return ctx.lastIntent
-    }
-  }
-  if (/导航|公司|朝阳|路线|去.*路|目的地|回家|去机场|去车站|怎么走/.test(t)) return 'nav'
-  if (/音乐|播放|周杰伦|晴天|歌|歌曲|听|放|唱|声/.test(t)) return 'music'
-  if (/空调|温度|冷|热|调|制冷|制热|通风|风量|暖/.test(t)) return 'ac'
-  if (/天气|下雨|温度|湿度|今天|明天|新闻|资讯|百科|什么|查询/.test(t)) return 'weather'
+  if (/导航|公司|朝阳|路线|去.*路|目的地|回家|去机场|去车站/.test(t)) return 'nav'
+  if (/音乐|播放|周杰伦|晴天|歌|歌曲|听|放/.test(t)) return 'music'
+  if (/空调|温度|冷|热|调|制冷|制热|通风|风量/.test(t)) return 'ac'
+  if (/天气|下雨|温度|湿度|今天|明天|新闻|资讯|百科|什么/.test(t)) return 'weather'
   return null
-}
-
-// 提取上下文实体
-function extractEntities(text: string, intent: CardType): Partial<DialogContext> {
-  const t = text.toLowerCase()
-  const entities: Partial<DialogContext> = {}
-  if (intent === 'nav') {
-    // 提取目的地（简单的关键词匹配）
-    const destMatches = t.match(/去(.+?)(?:怎么走|的路线|吧|$)/)
-    if (destMatches && destMatches[1]) entities.lastDestination = destMatches[1].trim()
-  }
-  if (intent === 'music') {
-    if (/周杰伦/.test(t)) entities.lastArtist = '周杰伦'
-    if (/晴天/.test(t)) entities.lastSong = '晴天'
-  }
-  if (intent === 'ac') {
-    const tempMatch = t.match(/(\d+)\s*度/)
-    if (tempMatch) entities.lastTemp = parseInt(tempMatch[1])
-  }
-  return entities
 }
 
 export default function CarAssistantView() {
@@ -73,14 +29,8 @@ export default function CarAssistantView() {
   const [inputText, setInputText] = useState('')
   const [clock, setClock] = useState('')
   const [acTemp, setAcTemp] = useState(22)
-  const [convHistory, setConvHistory] = useState<ConvEntry[]>([])
-  const [dialogCtx, setDialogCtx] = useState<DialogContext>(DEFAULT_CONTEXT)
-  const [contextActive, setContextActive] = useState(false)
-
   const listeningTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const micSimTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const contextTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const convEndRef = useRef<HTMLDivElement | null>(null)
 
   // ─── 时钟 ───
   useEffect(() => {
@@ -97,21 +47,6 @@ export default function CarAssistantView() {
   const clearTimers = () => {
     if (listeningTimer.current) { clearTimeout(listeningTimer.current); listeningTimer.current = null }
     if (micSimTimer.current) { clearTimeout(micSimTimer.current); micSimTimer.current = null }
-    if (contextTimer.current) { clearTimeout(contextTimer.current); contextTimer.current = null }
-  }
-
-  // ─── 清除对话上下文 ───
-  const clearContext = useCallback(() => {
-    setDialogCtx(DEFAULT_CONTEXT)
-    setContextActive(false)
-    if (contextTimer.current) { clearTimeout(contextTimer.current); contextTimer.current = null }
-  }, [])
-
-  // ─── 滚动到底部 ───
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      convEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
   }
 
   // ─── 状态切换核心 ───
@@ -121,111 +56,49 @@ export default function CarAssistantView() {
     if (card !== undefined) {
       setCardType(card)
     } else if (state !== 'responding' && state !== 'confused') {
+      // idle/listening/thinking 时清除卡片
       if (state === 'idle') setCardType('guide')
       else setCardType(null)
     }
   }, [])
 
-  // ─── 处理用户输入（含上下文） ───
+  // ─── 处理用户输入 ───
   const handleUserInput = useCallback((text: string) => {
     if (!text.trim()) return
-
-    // 添加到对话历史
-    const userEntry: ConvEntry = { role: 'user', text: text.trim(), ts: Date.now() }
-    setConvHistory(prev => [...prev, userEntry])
-    scrollToBottom()
-
-    // 检查是否结束对话
-    const t = text.toLowerCase()
-    if (/再见|拜拜|bye|回头|没事了|结束/.test(t)) {
-      switchState('responding', null)
-      setTimeout(() => {
-        const byeEntry: ConvEntry = { role: 'assistant', text: '好的，路上小心～需要帮忙随时叫我！🐺', ts: Date.now() }
-        setConvHistory(prev => [...prev, byeEntry])
-        clearContext()
-        switchState('idle', 'guide')
-      }, 500)
-      return
-    }
-
     // 显示思考态
     switchState('thinking', null)
-
-    // 模拟意图解析延迟（800ms）
+    // 模拟意图解析延迟
     setTimeout(() => {
-      // 上下文感知意图匹配
-      let ctx: DialogContext | undefined = undefined
-      if (contextActive) ctx = dialogCtx
-
-      const intent = matchIntent(text, ctx)
-
+      const intent = matchIntent(text)
       if (intent && MOCK_RESPONSES[intent]) {
-        // 提取实体并更新上下文
-        const entities = extractEntities(text, intent)
-        const newCtx: DialogContext = {
-          ...dialogCtx,
-          ...entities,
-          lastIntent: intent,
-        }
-        setDialogCtx(newCtx)
-        setContextActive(true)
-
         if (intent === 'ac') {
-          const targetTemp = newCtx.lastTemp || 22 + Math.floor(Math.random() * 6)
-          setAcTemp(targetTemp)
+          // 模拟空调温度变化
+          const newTemp = 22 + Math.floor(Math.random() * 6)
+          setAcTemp(newTemp)
         }
-
-        // 将上下文超时重置为 30 秒
-        clearContext()
-        contextTimer.current = setTimeout(() => {
-          const timeoutEntry: ConvEntry = {
-            role: 'assistant',
-            text: '⏱ 对话已超时，需要帮忙可以重新唤醒我',
-            ts: Date.now()
-          }
-          setConvHistory(prev => [...prev, timeoutEntry])
-          clearContext()
-        }, 30000)
-
         switchState('responding', intent as CardType)
-        const responseEntry: ConvEntry = {
-          role: 'assistant',
-          text: MOCK_RESPONSES[intent].label,
-          cardType: intent as CardType,
-          ts: Date.now()
-        }
-        setConvHistory(prev => [...prev, responseEntry])
-        scrollToBottom()
       } else {
-        // 未知意图 — 显示困惑引导
         switchState('confused', 'confused')
-        const confusedEntry: ConvEntry = {
-          role: 'assistant',
-          text: '😕 暂时不理解，试试说：导航去公司 / 播放音乐 / 打开空调',
-          cardType: 'confused',
-          ts: Date.now()
-        }
-        setConvHistory(prev => [...prev, confusedEntry])
-        scrollToBottom()
-        setTimeout(() => {
-          if (wolfState === 'confused') switchState('idle', 'guide')
-        }, 3000)
       }
     }, 800)
-  }, [switchState, dialogCtx, contextActive, clearContext])
+  }, [switchState])
 
   // ─── 麦克风按钮点击 ───
   const handleMicClick = useCallback(() => {
     if (wolfState === 'listening') {
+      // 模拟收到语音 -> 随机场景
       const scenes: CardType[] = ['nav', 'music', 'ac', 'weather']
       const picked = scenes[Math.floor(Math.random() * scenes.length)]
+      
       if (picked === 'ac') setAcTemp(22 + Math.floor(Math.random() * 6))
       switchState('responding', picked)
     } else {
       switchState('listening', null)
+      // 3秒后自动"识别"一个指令
       micSimTimer.current = setTimeout(() => {
         const scenes: CardType[] = ['nav', 'music', 'ac', 'weather']
         const picked = scenes[Math.floor(Math.random() * scenes.length)]
+        
         if (picked === 'ac') setAcTemp(22 + Math.floor(Math.random() * 6))
         switchState('responding', picked)
       }, 3000)
@@ -237,16 +110,6 @@ export default function CarAssistantView() {
     if (card && MOCK_RESPONSES[card]) {
       if (card === 'ac') setAcTemp(22 + Math.floor(Math.random() * 6))
       switchState('responding', card)
-      const labels: Record<string, string> = {
-        nav: '导航去公司', music: '播放周杰伦的歌',
-        ac: '空调调到24度', weather: '今天天气怎么样'
-      }
-      const userEntry: ConvEntry = { role: 'user', text: labels[card] || '', ts: Date.now() }
-      const respEntry: ConvEntry = { role: 'assistant', text: MOCK_RESPONSES[card].label, cardType: card, ts: Date.now() }
-      setConvHistory(prev => [...prev, userEntry, respEntry])
-      setDialogCtx({ lastIntent: card })
-      setContextActive(true)
-      scrollToBottom()
     }
   }, [switchState])
 
@@ -254,9 +117,8 @@ export default function CarAssistantView() {
   const handleInputSubmit = useCallback((e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault()
     if (!inputText.trim()) return
-    const t = inputText.trim()
+    handleUserInput(inputText.trim())
     setInputText('')
-    handleUserInput(t)
   }, [inputText, handleUserInput])
 
   // ─── 驾驶模式切换 ───
@@ -267,17 +129,14 @@ export default function CarAssistantView() {
   // ─── 退出 ───
   const handleExit = useCallback(() => {
     clearTimers()
-    clearContext()
     window.location.hash = '#/home'
-  }, [clearTimers, clearContext])
+  }, [])
 
   // ─── 监听 10s 倾听超时 ───
   useEffect(() => {
     if (wolfState === 'listening') {
       listeningTimer.current = setTimeout(() => {
         switchState('idle', 'guide')
-        const timeoutEntry: ConvEntry = { role: 'assistant', text: '⏱ 没有听到声音，可以点击麦克风或输入文字', ts: Date.now() }
-        setConvHistory(prev => [...prev, timeoutEntry])
       }, 10000)
     }
     return () => {
@@ -287,7 +146,9 @@ export default function CarAssistantView() {
 
   // ─── 键盘监听 ───
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleInputSubmit(e)
+    if (e.key === 'Enter') {
+      handleInputSubmit(e)
+    }
   }, [handleInputSubmit])
 
   // ─── 初始空态引导 ───
@@ -296,28 +157,12 @@ export default function CarAssistantView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ─── 对话气泡 ───
-  const ConvBubble = ({ entry }: { entry: ConvEntry }) => (
-    <div className={`conv-row ${entry.role}`}>
-      <div className={`conv-avatar ${entry.role}`}>
-        {entry.role === 'assistant' ? '🐺' : '👤'}
-      </div>
-      <div className={`conv-bubble ${entry.role}`}>
-        <div className="conv-text">{entry.text}</div>
-        {entry.cardType === 'nav' && <NavCard />}
-        {entry.cardType === 'music' && <MusicCard />}
-        {entry.cardType === 'ac' && <AcCard temp={acTemp} />}
-        {entry.cardType === 'weather' && <WeatherCard />}
-        {entry.cardType === 'confused' && <ConfusedCard onTagClick={handleGuideClick} />}
-      </div>
-    </div>
-  )
-
   // ─── 渲染 ───
   return (
     <div className={`car-assistant-app ${isDriving ? 'driving-mode' : ''}`}>
       <style>{carAssistantStyles}</style>
 
+      {/* 驾驶模式叠加层 */}
       <div className={`driving-overlay ${isDriving ? 'active' : ''}`} />
 
       {/* 状态栏 */}
@@ -327,11 +172,6 @@ export default function CarAssistantView() {
             {isDriving ? '🔇 免打扰' : '🔔'}
           </span>
           {isDriving && <span className="status-icon driving">🚗 驾驶模式</span>}
-          {contextActive && (
-            <span className="status-icon context-badge" title="对话上下文中">
-              💬 对话中
-            </span>
-          )}
         </div>
         <div className="status-right">
           <button className="status-btn-exit" onClick={handleExit} title="返回首页">
@@ -344,10 +184,10 @@ export default function CarAssistantView() {
       {/* 主内容 */}
       <div className="main-area">
         {/* 小狼形象 */}
-        <div className={`wolf-area ${cardType && cardType !== 'guide' && wolfState === 'responding' ? 'has-card' : ''} ${convHistory.length > 0 ? 'with-history' : ''}`}>
+        <div className={`wolf-area ${cardType && cardType !== 'guide' && wolfState === 'responding' ? 'has-card' : ''}`}>
           <WolfSvg state={wolfState} />
           <div className={`wolf-status-label ${wolfState === 'listening' || wolfState === 'idle' ? 'active' : ''}`}>
-            {wolfState === 'idle' && (convHistory.length === 0 ? '试试对我说：导航去公司' : '可以继续说话或输入文字')}
+            {wolfState === 'idle' && '试试对我说：导航去公司'}
             {wolfState === 'listening' && '🎤 请说话…'}
             {wolfState === 'thinking' && '🤔 正在思考…'}
             {wolfState === 'responding' && (cardType ? MOCK_RESPONSES[cardType]?.label || '✅ 已完成' : '✅ 已完成')}
@@ -362,22 +202,15 @@ export default function CarAssistantView() {
           </div>
         </div>
 
-        {/* 对话历史 */}
-        {convHistory.length > 0 && (
-          <div className="conv-history">
-            {convHistory.map((entry, i) => (
-              <ConvBubble key={`${entry.ts}-${i}`} entry={entry} />
-            ))}
-            <div ref={convEndRef} />
-          </div>
-        )}
-
-        {/* 空态引导卡片（无对话时显示） */}
-        {convHistory.length === 0 && (
-          <div className={`card-area ${cardType === 'guide' ? 'visible' : ''}`}>
-            {cardType === 'guide' && <GuideCard onTagClick={handleGuideClick} />}
-          </div>
-        )}
+        {/* 卡片内容区 */}
+        <div className={`card-area ${cardType ? 'visible' : ''}`}>
+          {cardType === 'nav' && <NavCard />}
+          {cardType === 'music' && <MusicCard />}
+          {cardType === 'ac' && <AcCard temp={acTemp} />}
+          {cardType === 'weather' && <WeatherCard />}
+          {cardType === 'guide' && <GuideCard onTagClick={handleGuideClick} />}
+          {cardType === 'confused' && <ConfusedCard onTagClick={handleGuideClick} />}
+        </div>
       </div>
 
       {/* 底部输入区 */}
@@ -413,34 +246,10 @@ export default function CarAssistantView() {
         <button className="demo-btn" onClick={() => switchState('idle', 'guide')}>⏹ 待机</button>
         <button className="demo-btn" onClick={() => switchState('listening', null)}>🎤 倾听</button>
         <button className="demo-btn" onClick={() => switchState('thinking', null)}>🤔 思考</button>
-        <button className="demo-btn" onClick={() => {
-          setAcTemp(24); switchState('responding', 'nav');
-          setConvHistory(prev => [...prev,
-            {role:'user', text:'导航去公司', ts:Date.now()},
-            {role:'assistant', text:'🗺 已规划路线', cardType:'nav', ts:Date.now()}
-          ])
-        }}>🗺 导航</button>
-        <button className="demo-btn" onClick={() => {
-          switchState('responding', 'music');
-          setConvHistory(prev => [...prev,
-            {role:'user', text:'播放周杰伦的歌', ts:Date.now()},
-            {role:'assistant', text:'🎵 正在播放', cardType:'music', ts:Date.now()}
-          ])
-        }}>🎵 音乐</button>
-        <button className="demo-btn" onClick={() => {
-          setAcTemp(24); switchState('responding', 'ac');
-          setConvHistory(prev => [...prev,
-            {role:'user', text:'空调调到24度', ts:Date.now()},
-            {role:'assistant', text:'❄️ 已调节空调', cardType:'ac', ts:Date.now()}
-          ])
-        }}>❄️ 空调</button>
-        <button className="demo-btn" onClick={() => {
-          switchState('responding', 'weather');
-          setConvHistory(prev => [...prev,
-            {role:'user', text:'今天天气怎么样', ts:Date.now()},
-            {role:'assistant', text:'☀️ 今日天气', cardType:'weather', ts:Date.now()}
-          ])
-        }}>🌤 天气</button>
+        <button className="demo-btn" onClick={() => { setAcTemp(24); switchState('responding', 'nav') }}>🗺 导航</button>
+        <button className="demo-btn" onClick={() => switchState('responding', 'music')}>🎵 音乐</button>
+        <button className="demo-btn" onClick={() => { setAcTemp(24); switchState('responding', 'ac') }}>❄️ 空调</button>
+        <button className="demo-btn" onClick={() => switchState('responding', 'weather')}>🌤 天气</button>
         <button className="demo-btn" onClick={() => switchState('confused', 'confused')}>😕 困惑</button>
         <button className={`demo-btn ${isDriving ? 'active' : ''}`} onClick={toggleDriving}>🚗 驾驶模式</button>
       </div>
@@ -457,23 +266,35 @@ function WolfSvg({ state }: { state: WolfState }) {
   const cls = ['wolf-svg', state].join(' ')
   return (
     <svg className={cls} viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+      {/* 身体 */}
       <ellipse cx="120" cy="160" rx="70" ry="64" fill="#6b7280" opacity=".15" />
+      {/* 头部 */}
       <circle cx="120" cy="100" r="52" fill="#b0b8c4" />
+      {/* 左耳 */}
       <path d="M 80 60 L 72 28 L 92 52 Z" fill="#b0b8c4" />
       <path d="M 80 60 L 76 38 L 90 54 Z" fill="#e8a0a0" />
+      {/* 右耳 */}
       <path d="M 160 60 L 168 28 L 148 52 Z" fill="#b0b8c4" />
       <path d="M 160 60 L 164 38 L 150 54 Z" fill="#e8a0a0" />
+      {/* 面部白色区域 */}
       <ellipse cx="120" cy="112" rx="36" ry="28" fill="#d1d5db" />
+      {/* 左眼 */}
       <circle cx="105" cy="96" r="8" fill="#1f2937" />
       <circle cx="107" cy="94" r="3" fill="#fff" opacity=".6" />
+      {/* 右眼 */}
       <circle cx="135" cy="96" r="8" fill="#1f2937" />
       <circle cx="137" cy="94" r="3" fill="#fff" opacity=".6" />
+      {/* 鼻子 */}
       <ellipse cx="120" cy="110" rx="5" ry="4" fill="#1f2937" />
+      {/* 嘴巴 */}
       <path className="mouth" d="M 112 120 Q 120 128 128 120" fill="none" stroke="#1f2937" strokeWidth="2" strokeLinecap="round" />
+      {/* 眉毛 */}
       <path d="M 95 86 Q 100 82 108 84" fill="none" stroke="#1f2937" strokeWidth="2" strokeLinecap="round" opacity=".5" />
       <path d="M 132 84 Q 140 82 145 86" fill="none" stroke="#1f2937" strokeWidth="2" strokeLinecap="round" opacity=".5" />
+      {/* 腮红 */}
       <ellipse cx="95" cy="108" rx="10" ry="7" fill="#e8a0a0" opacity=".3" />
       <ellipse cx="145" cy="108" rx="10" ry="7" fill="#e8a0a0" opacity=".3" />
+      {/* 发光环 */}
       <circle cx="120" cy="100" r="60" fill="none" stroke="var(--ca-accent)" strokeWidth="1" opacity={state === 'listening' ? '.6' : '0'} className="glow-ring" />
     </svg>
   )
@@ -680,7 +501,6 @@ const carAssistantStyles = `
 .car-assistant-app .status-icon.dnd { color: var(--ca-muted); }
 .car-assistant-app .status-icon.dnd.active { color: var(--ca-warning); }
 .car-assistant-app .status-icon.driving { color: var(--ca-accent); }
-.car-assistant-app .status-icon.context-badge { color: var(--ca-success); font-size: var(--ca-fs-meta); }
 .car-assistant-app .status-time { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 500; }
 .car-assistant-app .status-btn-exit {
   background: rgba(255,255,255,.08);
@@ -700,6 +520,7 @@ const carAssistantStyles = `
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: 20px 60px 16px;
   position: relative;
   overflow: hidden;
@@ -711,12 +532,10 @@ const carAssistantStyles = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 240px;
+  min-height: 280px;
   transition: all .4s ease;
-  flex-shrink: 0;
 }
-.car-assistant-app .wolf-area.has-card { min-height: 120px; transform: scale(.75); margin-bottom: -20px; }
-.car-assistant-app .wolf-area.with-history { min-height: 120px; transform: scale(.7); margin-bottom: -24px; }
+.car-assistant-app .wolf-area.has-card { min-height: 140px; transform: scale(.85); margin-bottom: -10px; }
 
 .car-assistant-app .wolf-svg {
   width: 200px;
@@ -777,75 +596,7 @@ const carAssistantStyles = `
 .car-assistant-app .wave-bar:nth-child(7) { animation-delay: .25s; height: 14px; }
 @keyframes caWaveAnim { 0%{transform:scaleY(.4)} 100%{transform:scaleY(1)} }
 
-/* ─── 对话历史 ─── */
-.car-assistant-app .conv-history {
-  width: 100%;
-  max-width: 860px;
-  flex: 1;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--ca-border) transparent;
-  padding: 8px 4px;
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 6%, #000 94%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 6%, #000 94%, transparent 100%);
-}
-.car-assistant-app .conv-history::-webkit-scrollbar { width: 4px; }
-.car-assistant-app .conv-history::-webkit-scrollbar-thumb { background: var(--ca-border); border-radius: 2px; }
-
-.car-assistant-app .conv-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
-  align-items: flex-start;
-  opacity: 0;
-  animation: caFadeIn .35s ease forwards;
-}
-.car-assistant-app .conv-row.user { flex-direction: row-reverse; }
-@keyframes caFadeIn { to { opacity: 1; } }
-
-.car-assistant-app .conv-avatar {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
-  flex-shrink: 0;
-}
-.car-assistant-app .conv-avatar.assistant {
-  background: var(--ca-accent-soft);
-  border: 1px solid rgba(91,141,239,.15);
-}
-.car-assistant-app .conv-avatar.user {
-  background: var(--ca-surface);
-  border: 1px solid var(--ca-border);
-}
-
-.car-assistant-app .conv-bubble {
-  max-width: 75%;
-  padding: 12px 18px;
-  border-radius: 16px;
-  font-size: var(--ca-fs-meta);
-  line-height: 1.5;
-  position: relative;
-}
-.car-assistant-app .conv-bubble.assistant {
-  background: var(--ca-surface-2);
-  border: 1px solid var(--ca-border);
-  border-bottom-left-radius: 4px;
-}
-.car-assistant-app .conv-bubble.user {
-  background: var(--ca-accent);
-  border: none;
-  border-bottom-right-radius: 4px;
-  color: #fff;
-}
-.car-assistant-app .conv-text { margin-bottom: 0; }
-.car-assistant-app .conv-bubble .card {
-  margin-top: 10px;
-  padding: 16px 20px;
-  border-radius: 12px;
-}
-
-/* ─── 卡片区（空态） ─── */
+/* ─── 卡片区 ─── */
 .car-assistant-app .card-area {
   width: 100%;
   max-width: 860px;

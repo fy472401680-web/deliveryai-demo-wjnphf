@@ -12,7 +12,6 @@ const wolfSvg = (page: Page) => page.locator('.wolf-svg')
 /** 获取状态标签元素 */
 const statusLabel = (page: Page) => page.locator('.wolf-status-label')
 /** 获取卡片内容区 */
-const cardArea = (page: Page) => page.locator('.card-area')
 /** 获取声波动画容器 */
 const waveContainer = (page: Page) => page.locator('.wave-container')
 /** 获取麦克风按钮 */

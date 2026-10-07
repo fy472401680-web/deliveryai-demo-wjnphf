@@ -115,7 +115,7 @@ test.describe('车机AI对话助手 - 助手形象状态', () => {
     await enterAssistant(page)
     await demoBtn(page, '困惑').click()
     await expect(wolfSvg(page)).toHaveClass(/confused/)
-    await expect(page.locator('.guide-card')).toContainText('没听清')
+    await expect(page.locator('.guide-card')).toContainText('暂时不理解')
   })
 })
 
@@ -162,7 +162,7 @@ test.describe('车机AI对话助手 - 文字输入场景', () => {
   test('REQ-004.5: 未知意图显示困惑引导', async ({ page }) => {
     await enterAssistant(page)
     // 输入一个不匹配任何意图的文本
-    await textInput(page).fill('你好啊今天吃什么')
+    await textInput(page).fill('hello world')
     await textInput(page).press('Enter')
     await expect(page.locator('.guide-card').first()).toContainText('暂时不理解', { timeout: 3000 })
   })

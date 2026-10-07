@@ -77,6 +77,93 @@ test.describe('车机AI对话助手 - 空态与引导', () => {
   })
 })
 
+
+// ═══════════════════════════════════════════
+// 对话消息气泡
+// ═══════════════════════════════════════════
+
+test.describe('车机AI对话助手 - 对话消息气泡', () => {
+  test('REQ-002.1: 文字输入后显示用户消息气泡', async ({ page }) => {
+    await enterAssistant(page)
+    await textInput(page).fill('导航去公司')
+    await textInput(page).press('Enter')
+    // 用户消息气泡可见
+    await expect(page.locator('.msg-user')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.msg-user .msg-b')).toContainText('导航去公司')
+  })
+
+  test('REQ-002.1: 用户消息后跟随助手消息气泡', async ({ page }) => {
+    await enterAssistant(page)
+    await textInput(page).fill('导航去公司')
+    await textInput(page).press('Enter')
+    // 助手消息气泡可见
+    await expect(page.locator('.msg-assistant')).toBeVisible({ timeout: 3000 })
+    // 助手消息包含回复内容
+    await expect(page.locator('.msg-assistant .msg-b')).toContainText('朝阳公园')
+  })
+
+  test('REQ-002.2: 引导标签点击后生成消息气泡', async ({ page }) => {
+    await enterAssistant(page)
+    await page.locator('.guide-tag', { hasText: '导航去公司' }).click()
+    // 用户消息和助手消息都应出现
+    await expect(page.locator('.msg-user')).toBeVisible()
+    await expect(page.locator('.msg-assistant')).toBeVisible()
+    // 助手消息中包含导航卡片
+    await expect(page.locator('.msg-assistant .card.map-card')).toBeVisible()
+  })
+
+  test('REQ-002.2: 多轮对话消息累加', async ({ page }) => {
+    await enterAssistant(page)
+    // 第一轮
+    await textInput(page).fill('导航去公司')
+    await textInput(page).press('Enter')
+    await expect(page.locator('.msg')).toHaveCount(2, { timeout: 3000 }) // user + assistant
+
+    // 第二轮
+    await textInput(page).fill('今天天气怎么样')
+    await textInput(page).press('Enter')
+    await expect(page.locator('.msg')).toHaveCount(4, { timeout: 3000 }) // 2 user + 2 assistant
+  })
+
+  test('REQ-002.3: 首次消息后引导卡片不再显示于对话区', async ({ page }) => {
+    await enterAssistant(page)
+    // 初始时对话区内有引导卡片(.dialog-guide)
+    await expect(page.locator('.dialog-guide')).toBeVisible()
+
+    // 输入消息后引导卡片消失
+    await textInput(page).fill('导航去公司')
+    await textInput(page).press('Enter')
+    await expect(page.locator('.dialog-guide')).not.toBeVisible({ timeout: 3000 })
+  })
+})
+
+// ═══════════════════════════════════════════
+// 思考态与打字指示器
+// ═══════════════════════════════════════════
+
+test.describe('车机AI对话助手 - 思考态与打字指示器', () => {
+  test('REQ-012: 思考态显示打字指示器', async ({ page }) => {
+    await enterAssistant(page)
+    // 通过演示面板进入思考态
+    await demoBtn(page, '思考').click()
+    // 打字指示器可见
+    await expect(page.locator('.typing-indicator')).toBeVisible()
+    // 三个打字点
+    await expect(page.locator('.typing-dot')).toHaveCount(3)
+  })
+
+  test('REQ-012: 文字输入后先显示打字指示器再显示结果', async ({ page }) => {
+    await enterAssistant(page)
+    await textInput(page).fill('导航去公司')
+    await textInput(page).press('Enter')
+    // 思考中应短暂出现打字指示器
+    await expect(page.locator('.typing-indicator')).toBeVisible({ timeout: 1000 })
+    // 最终打字指示器消失，显示结果
+    await expect(page.locator('.typing-indicator')).not.toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.card.map-card')).toBeVisible({ timeout: 3000 })
+  })
+})
+
 // ═══════════════════════════════════════════
 // 助手形象状态
 // ═══════════════════════════════════════════

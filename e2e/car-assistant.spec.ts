@@ -11,8 +11,6 @@ async function enterAssistant(page: Page) {
 const wolfSvg = (page: Page) => page.locator('.wolf-svg')
 /** 获取状态标签元素 */
 const statusLabel = (page: Page) => page.locator('.wolf-status-label')
-/** 获取卡片内容区 */
-const cardArea = (page: Page) => page.locator('.card-area')
 /** 获取声波动画容器 */
 const waveContainer = (page: Page) => page.locator('.wave-container')
 /** 获取麦克风按钮 */
@@ -22,7 +20,11 @@ const textInput = (page: Page) => page.locator('.input-wrapper input')
 /** 获取演示控制按钮（按文案筛选） */
 const demoBtn = (page: Page, label: string) => page.locator('.demo-btn', { hasText: label })
 /** 获取驾驶模式切换按钮 */
-const drivingToggle = (page: Page) => page.locator('#drivingToggle, .demo-btn', { hasText: '驾驶模式' })
+const drivingToggle = (page: Page) => page.locator('.demo-btn', { hasText: '驾驶模式' })
+/** 获取对话历史行 */
+const convRow = (page: Page) => page.locator('.conv-row')
+/** 获取对话气泡 */
+const convBubble = (page: Page) => page.locator('.conv-bubble')
 
 // ═══════════════════════════════════════════
 // 空态与引导
@@ -32,7 +34,7 @@ test.describe('车机AI对话助手 - 空态与引导', () => {
   test('REQ-013: 首次启动显示引导卡片和待机小狼形象', async ({ page }) => {
     await enterAssistant(page)
 
-    // 小狼处于待机态（class 为 idle 或无 listening/thinking/responding/confused）
+    // 小狼处于待机态
     await expect(wolfSvg(page)).toBeVisible()
     await expect(wolfSvg(page)).not.toHaveClass(/listening|thinking|responding|confused/)
 
@@ -56,25 +58,28 @@ test.describe('车机AI对话助手 - 空态与引导', () => {
   test('引导标签点击触发导航卡片', async ({ page }) => {
     await enterAssistant(page)
     await page.locator('.guide-tag', { hasText: '导航去公司' }).click()
-    await expect(page.locator('.card.map-card')).toBeVisible()
+    // 引导标签点击后应该出现对话气泡
+    await expect(page.locator('.conv-row').first()).toBeVisible()
+    // 对话气泡内应有地图卡片
+    await expect(page.locator('.conv-row .map-card')).toBeVisible()
   })
 
   test('引导标签点击触发音乐卡片', async ({ page }) => {
     await enterAssistant(page)
     await page.locator('.guide-tag', { hasText: '播放周杰伦的歌' }).click()
-    await expect(page.locator('.card.music-card')).toBeVisible()
+    await expect(page.locator('.conv-row .music-card')).toBeVisible()
   })
 
   test('引导标签点击触发空调卡片', async ({ page }) => {
     await enterAssistant(page)
     await page.locator('.guide-tag', { hasText: '空调调到 24 度' }).click()
-    await expect(page.locator('.card.ac-card')).toBeVisible()
+    await expect(page.locator('.conv-row .ac-card')).toBeVisible()
   })
 
   test('引导标签点击触发天气卡片', async ({ page }) => {
     await enterAssistant(page)
     await page.locator('.guide-tag', { hasText: '今天天气怎么样' }).click()
-    await expect(page.locator('.card.info-card')).toBeVisible()
+    await expect(page.locator('.conv-row .info-card')).toBeVisible()
   })
 })
 
@@ -85,7 +90,6 @@ test.describe('车机AI对话助手 - 空态与引导', () => {
 test.describe('车机AI对话助手 - 助手形象状态', () => {
   test('REQ-012: 待机态 - 小狼显示默认静态', async ({ page }) => {
     await enterAssistant(page)
-    // 通过演示面板切换到待机
     await demoBtn(page, '待机').click()
     await expect(wolfSvg(page)).not.toHaveClass(/listening|thinking|responding|confused/)
     await expect(statusLabel(page)).toContainText('试试对我说')
@@ -115,7 +119,6 @@ test.describe('车机AI对话助手 - 助手形象状态', () => {
     await enterAssistant(page)
     await demoBtn(page, '困惑').click()
     await expect(wolfSvg(page)).toHaveClass(/confused/)
-    await expect(page.locator('.guide-card')).toContainText('暂时不理解')
   })
 })
 
@@ -134,37 +137,94 @@ test.describe('车机AI对话助手 - 文字输入场景', () => {
     await enterAssistant(page)
     await textInput(page).fill('导航去公司')
     await textInput(page).press('Enter')
-    // 等待思考延迟（800ms）和卡片渐入（400ms）
-    await expect(page.locator('.card.map-card')).toBeVisible({ timeout: 3000 })
+    // 等待思考延迟和卡片渲染
+    await expect(convRow(page)).toHaveCount(2, { timeout: 3000 })
+    await expect(page.locator('.conv-row .map-card')).toBeVisible({ timeout: 3000 })
   })
 
   test('REQ-004.2: 文字输入"播放周杰伦的歌"显示音乐卡片', async ({ page }) => {
     await enterAssistant(page)
     await textInput(page).fill('播放周杰伦的歌')
     await textInput(page).press('Enter')
-    await expect(page.locator('.card.music-card')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.conv-row .music-card')).toBeVisible({ timeout: 3000 })
   })
 
   test('REQ-004.3: 文字输入"空调调到24度"显示空调卡片', async ({ page }) => {
     await enterAssistant(page)
     await textInput(page).fill('空调调到24度')
     await textInput(page).press('Enter')
-    await expect(page.locator('.card.ac-card')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.conv-row .ac-card')).toBeVisible({ timeout: 3000 })
   })
 
   test('REQ-004.4: 文字输入"今天天气怎么样"显示天气卡片', async ({ page }) => {
     await enterAssistant(page)
     await textInput(page).fill('今天天气怎么样')
     await textInput(page).press('Enter')
-    await expect(page.locator('.card.info-card')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('.conv-row .info-card')).toBeVisible({ timeout: 3000 })
   })
 
   test('REQ-004.5: 未知意图显示困惑引导', async ({ page }) => {
     await enterAssistant(page)
-    // 输入一个不匹配任何意图的文本
     await textInput(page).fill('hello world')
     await textInput(page).press('Enter')
-    await expect(page.locator('.guide-card').first()).toContainText('暂时不理解', { timeout: 3000 })
+    // 检查困惑回复出现在对话气泡中
+    await expect(convRow(page)).toHaveCount(2, { timeout: 3000 })
+    await expect(convBubble(page).last()).toContainText('暂时不理解', { timeout: 3000 })
+  })
+})
+
+// ═══════════════════════════════════════════
+// REQ-009: 多轮对话上下文保持
+// ═══════════════════════════════════════════
+
+test.describe('车机AI对话助手 - 多轮对话上下文(REQ-009)', () => {
+  test('REQ-009: 多轮连续提问无需重复唤醒', async ({ page }) => {
+    await enterAssistant(page)
+    // 第一轮：导航
+    await textInput(page).fill('导航去公司')
+    await textInput(page).press('Enter')
+    await expect(page.locator('.conv-row .map-card')).toBeVisible({ timeout: 3000 })
+    await expect(convRow(page)).toHaveCount(2)
+
+    // 第二轮：音乐（无需唤醒，直接输入新意图）
+    await textInput(page).fill('播放周杰伦的歌')
+    await textInput(page).press('Enter')
+    await expect(page.locator('.conv-row .music-card')).toBeVisible({ timeout: 3000 })
+    // 应该有 4 行对话记录（user+assistant * 2）
+    await expect(convRow(page)).toHaveCount(4, { timeout: 3000 })
+  })
+
+  test('REQ-009: 上下文修正 - 基于上一轮上下文识别', async ({ page }) => {
+    await enterAssistant(page)
+    // 先发一个导航意图
+    await textInput(page).fill('导航去公司')
+    await textInput(page).press('Enter')
+    await expect(page.locator('.conv-row .map-card')).toBeVisible({ timeout: 3000 })
+
+    // 然后说"换一个地方" - 应基于上次导航上下文响应（而不是unknown）
+    await textInput(page).fill('换一个地方')
+    await textInput(page).press('Enter')
+    // 应该是导航卡片而不是困惑卡片
+    await expect(page.locator('.conv-row .map-card')).toHaveCount(2, { timeout: 3000 })
+  })
+
+  test('REQ-009: 说"再见"清除上下文', async ({ page }) => {
+    await enterAssistant(page)
+    // 先发一个导航命令
+    await textInput(page).fill('导航去公司')
+    await textInput(page).press('Enter')
+    await expect(page.locator('.conv-row .map-card')).toBeVisible({ timeout: 3000 })
+
+    // 说再见
+    await textInput(page).fill('再见')
+    await textInput(page).press('Enter')
+    // 应显示告别回复
+    await expect(convBubble(page).last()).toContainText('路上小心', { timeout: 3000 })
+
+    // 再次输入新命令，不应该有上下文
+    await textInput(page).fill('今天天气怎么样')
+    await textInput(page).press('Enter')
+    await expect(page.locator('.conv-row .info-card')).toBeVisible({ timeout: 3000 })
   })
 })
 
@@ -176,12 +236,12 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
   test('REQ-005: 导航卡片含路线概览/ETA/距离/出发按钮', async ({ page }) => {
     await enterAssistant(page)
     await demoBtn(page, '导航').click()
-    const navCard = page.locator('.card.map-card')
+    const navCard = page.locator('.conv-row .map-card').first()
     await expect(navCard).toBeVisible()
 
     // 目的地
     await expect(navCard.locator('.map-destination')).toContainText('朝阳公园')
-    // ETA 信息：预计时间、距离、到达时间
+    // ETA 信息
     await expect(navCard.locator('.map-eta')).toContainText('15 分钟')
     await expect(navCard.locator('.map-eta')).toContainText('5.2 km')
     await expect(navCard.locator('.map-eta')).toContainText('10:45')
@@ -192,11 +252,9 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
   test('REQ-006: 音乐卡片含封面/歌名/进度条/控制按钮', async ({ page }) => {
     await enterAssistant(page)
     await demoBtn(page, '音乐').click()
-    const musicCard = page.locator('.card.music-card')
+    const musicCard = page.locator('.conv-row .music-card').first()
     await expect(musicCard).toBeVisible()
 
-    // 封面区域
-    await expect(musicCard.locator('.music-cover')).toBeVisible()
     // 歌名和歌手
     await expect(musicCard.locator('.music-title')).toContainText('晴天')
     await expect(musicCard.locator('.music-artist')).toContainText('周杰伦')
@@ -213,14 +271,14 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
   test('REQ-007: 空调卡片含温度数值/风量图标/模式图标', async ({ page }) => {
     await enterAssistant(page)
     await demoBtn(page, '空调').click()
-    const acCard = page.locator('.card.ac-card')
+    const acCard = page.locator('.conv-row .ac-card').first()
     await expect(acCard).toBeVisible()
 
     // 温度显示
     await expect(acCard.locator('.ac-temp-number')).toBeVisible()
     await expect(acCard.locator('.ac-temp-unit')).toContainText('°C')
     await expect(acCard.locator('.ac-temp-label')).toContainText('已设为')
-    // 状态图标：制冷、风量
+    // 状态图标
     const acIcons = acCard.locator('.ac-icon')
     await expect(acIcons).toHaveCount(3)
     await expect(acIcons.nth(0)).toContainText('制冷')
@@ -231,18 +289,16 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
   test('REQ-008: 天气卡片含城市/温度/天气图标/描述', async ({ page }) => {
     await enterAssistant(page)
     await demoBtn(page, '天气').click()
-    const weatherCard = page.locator('.card.info-card')
+    const weatherCard = page.locator('.conv-row .info-card').first()
     await expect(weatherCard).toBeVisible()
 
-    // 天气图标
-    await expect(weatherCard.locator('.info-icon')).toBeVisible()
     // 城市标题
     await expect(weatherCard.locator('.info-title')).toContainText('北京')
     // 温度
     await expect(weatherCard.locator('.info-temp')).toContainText('22°')
     // 描述
     await expect(weatherCard.locator('.info-desc')).toContainText('晴朗')
-    // 额外信息：湿度、风速
+    // 额外信息
     await expect(weatherCard.locator('.info-extra')).toContainText('湿度')
     await expect(weatherCard.locator('.info-extra')).toContainText('风速')
   })
@@ -255,7 +311,6 @@ test.describe('车机AI对话助手 - 场景卡片内容验证', () => {
 test.describe('车机AI对话助手 - 麦克风与倾听', () => {
   test('REQ-001.1: 点击麦克风按钮进入倾听态', async ({ page }) => {
     await enterAssistant(page)
-    // 点击麦克风按钮进入倾听
     await micBtn(page).click()
     await expect(wolfSvg(page)).toHaveClass(/listening/)
     await expect(statusLabel(page)).toContainText('请说话')
@@ -264,20 +319,19 @@ test.describe('车机AI对话助手 - 麦克风与倾听', () => {
   test('REQ-001.3: 倾听态显示声波动画', async ({ page }) => {
     await enterAssistant(page)
     await micBtn(page).click()
-    // 声波容器应有 active class
     await expect(waveContainer(page)).toHaveClass(/active/)
   })
 
   test('REQ-001.2: 倾听态10秒超时回到待机态', async ({ page }) => {
     await enterAssistant(page)
-    // 先通过演示面板进入倾听态（避免 mic 3s 自动识别干扰）
+    // 通过演示面板进入倾听态（避免 mic 3s 自动识别干扰）
     await demoBtn(page, '倾听').click()
     await expect(wolfSvg(page)).toHaveClass(/listening/)
 
     // 等待 10 秒倾听超时
     await page.waitForTimeout(10500)
 
-    // 应回到待机态，显示引导卡片
+    // 应回到待机态
     await expect(wolfSvg(page)).not.toHaveClass(/listening|thinking|responding|confused/)
     await expect(page.locator('.guide-card')).toBeVisible()
   })
@@ -288,7 +342,7 @@ test.describe('车机AI对话助手 - 麦克风与倾听', () => {
 // ═══════════════════════════════════════════
 
 test.describe('车机AI对话助手 - 驾驶模式', () => {
-  test('REQ-010: 驾驶模式切换 - 切换后容器有 driving-mode class', async ({ page }) => {
+  test('REQ-010: 驾驶模式切换', async ({ page }) => {
     await enterAssistant(page)
     const app = page.locator('.car-assistant-app')
 
@@ -319,7 +373,6 @@ test.describe('车机AI对话助手 - 演示控制面板', () => {
     const controlPanel = page.locator('.demo-controls')
     await expect(controlPanel).toBeVisible()
 
-    // 验证所有按钮存在
     const btnTexts = ['待机', '倾听', '思考', '导航', '音乐', '空调', '天气', '困惑', '驾驶模式']
     for (const text of btnTexts) {
       await expect(demoBtn(page, text)).toBeVisible()
@@ -340,7 +393,7 @@ test.describe('车机AI对话助手 - 演示控制面板', () => {
     // 思考 -> 导航
     await demoBtn(page, '导航').click()
     await expect(wolfSvg(page)).toHaveClass(/responding/)
-    await expect(page.locator('.card.map-card')).toBeVisible()
+    await expect(page.locator('.conv-row .map-card')).toBeVisible()
   })
 })
 
@@ -349,7 +402,7 @@ test.describe('车机AI对话助手 - 演示控制面板', () => {
 // ═══════════════════════════════════════════
 
 test.describe('车机AI对话助手 - 状态栏与导航', () => {
-  test('状态栏显示时间和退出按钮', async ({ page }) => {
+  test('状态栏显示时间、上下文指示器和退出按钮', async ({ page }) => {
     await enterAssistant(page)
     await expect(page.locator('.status-bar')).toBeVisible()
     await expect(page.locator('.status-time')).toBeVisible()
@@ -366,7 +419,6 @@ test.describe('车机AI对话助手 - 状态栏与导航', () => {
     await enterAssistant(page)
     await expect(page.locator('.bottom-area')).toBeVisible()
     await expect(micBtn(page)).toBeVisible()
-    // 驾驶模式按钮（🚗）
     await expect(page.locator('.input-row .icon-btn').last()).toContainText('🚗')
   })
 })

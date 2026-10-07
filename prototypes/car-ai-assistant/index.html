@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小狼助手 · 车机 AI 对话</title>
+<style>
+/* ═══════════════════════════════════════════
+   设计 Token
+   ═══════════════════════════════════════════ */
+:root {
+  --bg:            #080a0f;
+  --surface-glass: rgba(24, 29, 44, 0.55);
+  --border-glass:  rgba(91, 141, 239, 0.10);
+  --fg:            #eef0f4;
+  --fg2:           #9aa1b5;
+  --muted:         #6b7388;
+  --accent:        #5b8def;
+  --accent-glow:   rgba(91,141,239,0.3);
+  --accent-soft:   rgba(91,141,239,0.08);
+
+  --fs-body:  22px;
+  --fs-small: 18px;
+  --fs-meta:  15px;
+  --fs-tiny:  13px;
+}
+.driving-mode {
+  --fs-body:  26px;
+  --fs-small: 22px;
+  --fs-meta:  18px;
+  --fs-tiny:  15px;
+}
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  display: flex; align-items: center; justify-content: center;
+  background: #05070a;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+.app-frame {
+  width: 1920px; height: 1080px;
+  max-width: 100vw; max-height: 100vh;
+  aspect-ratio: 16/9;
+  background: var(--bg);
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column;
+  border-radius: 10px;
+  box-shadow: 0 0 120px rgba(0,0,0,.9);
+}
+
+/* 环境氛围 */
+.ambient { position:absolute; inset:0; pointer-events:none; z-index:0; overflow:hidden; }
+.ambient .o {
+  position:absolute; border-radius:50%; filter:blur(120px); opacity:0.25;
+}
+.ambient .o:nth-child(1) {
+  width:600px;height:600px;
+  background:radial-gradient(circle,rgba(91,141,239,.18),transparent);
+  top:-150px;right:-150px;
+  animation:oa 14s ease-in-out infinite alternate;
+}
+.ambient .o:nth-child(2) {
+  width:450px;height:450px;
+  background:radial-gradient(circle,rgba(124,109,240,.12),transparent);
+  bottom:-100px;left:-100px;
+  animation:ob 18s ease-in-out infinite alternate;
+}
+@keyframes oa {
+  0%{transform:translate(0,0)scale(1)}100%{transform:translate(-100px,80px)scale(1.25)}
+}
+@keyframes ob {
+  0%{transform:translate(0,0)scale(1)}100%{transform:translate(80px,-60px)scale(1.2)}
+}
+.ambient-grid {
+  position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.025;
+  background-image:linear-gradient(rgba(255,255,255,.04)1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.04)1px,transparent 1px);
+  background-size:80px 80px;
+}
+
+/* 状态栏 */
+.status-bar {
+  position:relative;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 36px;height:44px;flex-shrink:0;
+  background:rgba(8,10,15,.6);backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(255,255,255,.03);
+}
+.status-left{display:flex;align-items:center;gap:16px}
+.status-badge{
+  display:flex;align-items:center;gap:4px;
+  font-size:var(--fs-tiny);padding:2px 10px;
+  border-radius:999px;border:1px solid transparent;
+  opacity:.8;letter-spacing:.02em;
+}
+.status-badge.dnd{background:rgba(255,159,10,.06);border-color:rgba(255,159,10,.15);color:#ff9f0a}
+.status-badge.driving{background:rgba(91,141,239,.06);border-color:rgba(91,141,239,.15);color:var(--accent)}
+.status-right{display:flex;align-items:center;gap:16px}
+.status-time{font-family:'JetBrains Mono',monospace;font-size:var(--fs-tiny);color:var(--muted);letter-spacing:.06em;font-weight:500}
+.status-signal{display:flex;align-items:flex-end;gap:2px;height:14px}
+.status-signal s{width:3px;border-radius:2px;background:var(--muted)}
+.status-signal s:nth-child(1){height:6px;opacity:.3}
+.status-signal s:nth-child(2){height:9px;opacity:.5}
+.status-signal s:nth-child(3){height:12px;opacity:.7}
+.status-signal s:nth-child(4){height:15px;opacity:.9}
+
+/* 主区 */
+.main-area {
+  position:relative;z-index:1;flex:1;
+  display:flex;flex-direction:column;align-items:center;
+  padding:12px 80px 8px;overflow:hidden;
+}
+
+/* ─── 小狼助手 ─── */
+.wolf-section {
+  display:flex;flex-direction:column;align-items:center;
+  transition:all .5s cubic-bezier(.34,1.56,.64,1);
+  position:relative;
+}
+.wolf-section.compact{transform:scale(.7) translateY(-48px);margin-bottom:-50px}
+.wolf-wrap{
+  position:relative;width:220px;height:220px;
+  display:flex;align-items:center;justify-content:center;
+}
+.wolf-glow{
+  position:absolute;width:180px;height:180px;border-radius:50%;
+  background:radial-gradient(circle,var(--accent-glow)0%,transparent 70%);
+  opacity:0;transition:opacity .5s,transform .5s;transform:scale(.8);
+}
+.wolf-glow.on{opacity:1;transform:scale(1);animation:gp 2s ease-in-out infinite}
+.wolf-glow.listen{background:radial-gradient(circle,rgba(91,141,239,.45)0%,transparent 70%)}
+.wolf-glow.speak{background:radial-gradient(circle,rgba(91,141,239,.25)0%,rgba(124,109,240,.15)50%,transparent 70%)}
+@keyframes gp{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.1);opacity:1}}
+
+.wolf-svg{
+  position:relative;z-index:1;
+  width:190px;height:206px;
+  filter:drop-shadow(0 4px 20px rgba(0,0,0,.3));
+  transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+}
+/* 状态动画 */
+.wolf-svg.listen{animation:wf 1.4s ease-in-out infinite}
+.wolf-svg.think{animation:wt 1.8s ease-in-out infinite}
+.wolf-svg.speak{animation:wb .5s ease-in-out infinite}
+.wolf-svg.confused{animation:wsh .35s ease-in-out 3}
+
+@keyframes wf{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes wt{0%,100%{transform:rotate(0)}25%{transform:rotate(-3deg)}75%{transform:rotate(3deg)}}
+@keyframes wb{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes wsh{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+.wolf-status{
+  font-size:var(--fs-small);color:var(--muted);
+  margin-top:8px;text-align:center;
+  transition:all .3s;min-height:26px;font-weight:400;
+  letter-spacing:.01em;
+}
+.wolf-status.on{color:var(--accent);font-weight:500}
+.wolf-status.hint{color:var(--muted);font-size:var(--fs-meta);opacity:.6}
+
+/* SVG 子元素动画 */
+.wolf-ear{transform-origin:center bottom;transition:transform .25s}
+.wolf-svg.listen .wolf-ear{animation:ep 1.4s ease-in-out infinite}
+.wolf-svg.listen .wolf-ear.right{animation:epr 1.4s ease-in-out infinite}
+@keyframes ep{0%,100%{transform:rotate(0)}50%{transform:rotate(-4deg)}}
+@keyframes epr{0%,100%{transform:rotate(0)}50%{transform:rotate(4deg)}}
+
+.wolf-eyes{transition:transform .15s}
+.wolf-blink{animation:bl 3s ease-in-out infinite}
+@keyframes bl{0%,46%,54%,100%{transform:scaleY(1)}48%,52%{transform:scaleY(.05)}}
+
+/* 嘴巴分层 */
+.wolf-mouth-open{opacity:0;transition:opacity .15s}
+.wolf-svg.speak .wolf-mouth-open{
+  opacity:1;
+  transform-origin:120px 134px;
+  animation:mt .18s ease-in-out infinite alternate;
+}
+.wolf-svg.speak .wolf-tongue{
+  opacity:1!important;
+  transform-origin:120px 134px;
+  animation:mt .18s ease-in-out infinite alternate;
+}
+@keyframes mt{0%{transform:translateY(1px) scaleY(.85)}100%{transform:translateY(0) scaleY(1)}}
+.wolf-mouth-closed{opacity:1;transition:opacity .15s}
+.wolf-svg.speak .wolf-mouth-closed{opacity:0}
+/* 犬齿 - 说话时可见 */
+.wolf-fang{opacity:0;transition:opacity .15s}
+.wolf-svg.speak .wolf-fang{opacity:.85}
+/* 围巾随身体微动 */
+.wolf-scarf{transition:transform .2s}
+.wolf-svg.speak .wolf-scarf{animation:sc .4s ease-in-out infinite alternate}
+@keyframes sc{0%{transform:translateY(0)}100%{transform:translateY(1px)}}
+
+
+.wolf-brow{transition:all .3s}
+.wolf-svg.confused .wolf-brow.left{transform:rotate(-18deg) translate(-2px,-3px)}
+.wolf-svg.confused .wolf-brow.right{transform:rotate(18deg) translate(2px,-3px)}
+
+.wolf-tail{transform-origin:190px 200px;animation:tw 2s ease-in-out infinite}
+@keyframes tw{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
+.wolf-svg.listen .wolf-tail{animation:twf .8s ease-in-out infinite}
+@keyframes twf{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
+
+/* 声波 */
+.wave-area{
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  height:30px;margin-top:4px;
+  opacity:0;transform:translateY(8px);transition:all .4s;
+}
+.wave-area.on{opacity:1;transform:translateY(0)}
+.wave-b{
+  width:3px;border-radius:3px;
+  background:linear-gradient(to top,var(--accent),rgba(91,141,239,.5));
+  animation:wa .7s ease-in-out infinite alternate;
+}
+.wave-b:nth-child(1){height:7px;animation-delay:0s}
+.wave-b:nth-child(2){height:14px;animation-delay:.08s}
+.wave-b:nth-child(3){height:24px;animation-delay:.16s}
+.wave-b:nth-child(4){height:30px;animation-delay:.24s}
+.wave-b:nth-child(5){height:20px;animation-delay:.12s}
+.wave-b:nth-child(6){height:12px;animation-delay:.2s}
+.wave-b:nth-child(7){height:8px;animation-delay:.28s}
+@keyframes wa{0%{transform:scaleY(.4);opacity:.5}100%{transform:scaleY(1);opacity:1}}
+
+/* ─── 对话区 ─── */
+.dialog-area{
+  width:100%;max-width:780px;margin-top:2px;
+  flex:1;overflow-y:auto;
+  display:flex;flex-direction:column;gap:8px;
+  padding:2px 8px 4px;
+  mask-image:linear-gradient(to bottom,transparent 0%,#000 8%,#000 92%,transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0%,#000 8%,#000 92%,transparent 100%);
+  scrollbar-width:none;
+}
+.dialog-area::-webkit-scrollbar{display:none}
+
+.msg{
+  display:flex;gap:10px;align-items:flex-end;
+  opacity:0;transform:translateY(10px);
+  animation:mi .35s ease forwards;
+}
+.msg.user{flex-direction:row-reverse}
+@keyframes mi{to{opacity:1;transform:translateY(0)}}
+
+.msg-av{
+  width:34px;height:34px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;border:1px solid rgba(255,255,255,.05);
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+}
+.msg-av.as{background:linear-gradient(135deg,rgba(91,141,239,.08),rgba(124,109,240,.06))}
+.msg-av.usr{background:#141820}
+
+.msg-b{
+  max-width:66%;padding:10px 16px;
+  border-radius:14px;font-size:var(--fs-meta);
+  line-height:1.55;position:relative;
+  box-shadow:0 2px 10px rgba(0,0,0,.12);
+}
+.msg.as .msg-b{
+  background:rgba(24,29,44,.55);
+  border:1px solid var(--border-glass);
+  backdrop-filter:blur(12px);
+  border-bottom-left-radius:4px;
+  color:var(--fg2);
+}
+.msg.usr .msg-b{
+  background:linear-gradient(135deg,var(--accent),rgba(91,141,239,.85));
+  border:none;border-bottom-right-radius:4px;color:#fff;
+}
+
+/* 打字点 */
+.typing{
+  display:flex;gap:10px;align-items:flex-end;
+  opacity:0;animation:mi .3s ease forwards;
+}
+.typing .msg-b{
+  background:rgba(24,29,44,.55);
+  border:1px solid var(--border-glass);
+  backdrop-filter:blur(12px);
+  padding:12px 18px;border-bottom-left-radius:4px;
+  display:flex;gap:4px;align-items:center;
+}
+.typing-d{
+  width:6px;height:6px;border-radius:50%;
+  background:var(--muted);animation:td 1.2s ease-in-out infinite;
+}
+.typing-d:nth-child(1){animation-delay:0s}
+.typing-d:nth-child(2){animation-delay:.2s}
+.typing-d:nth-child(3){animation-delay:.4s}
+@keyframes td{0%,60%,100%{opacity:.3;transform:scale(.8)}30%{opacity:1;transform:scale(1.1)}}
+
+/* 卡片回复 */
+.msg-b.card-r{max-width:100%!important;padding:0!important;background:0 0!important;border:none!important}
+
+/* ─── 服务卡片 ─── */
+.sc{
+  background:rgba(24,29,44,.55);
+  backdrop-filter:blur(20px);
+  border:1px solid var(--border-glass);
+  border-radius:20px;padding:24px 28px;
+  box-shadow:0 8px 32px rgba(0,0,0,.4);
+}
+
+/* 导航 */
+.nm{position:relative;height:150px;border-radius:12px;margin-bottom:18px;overflow:hidden;
+  background:linear-gradient(145deg,#0c1628,#16213e);border:1px solid rgba(255,255,255,.04)}
+.nm-r{position:absolute;background:rgba(255,255,255,.03)}
+.nm-r.h{width:100%;height:1px;left:0}.nm-r:nth-child(1){top:25%}.nm-r:nth-child(2){top:50%}.nm-r:nth-child(3){top:75%}
+.nm-r.v{width:1px;height:100%;top:0}.nm-r:nth-child(4){left:25%}.nm-r:nth-child(5){left:50%}.nm-r:nth-child(6){left:75%}
+.nm-ms{position:absolute;width:12px;height:12px;border-radius:50%;z-index:2}
+.nm-ms.s{background:var(--accent);box-shadow:0 0 0 4px rgba(91,141,239,.2),0 0 20px rgba(91,141,239,.25);left:15%;top:35%}
+.nm-ms.e{background:var(--danger);box-shadow:0 0 0 4px rgba(255,69,58,.2),0 0 20px rgba(255,69,58,.15);right:12%;top:55%}
+.nm-rl{position:absolute;left:18%;top:42%;width:65%;height:3px;
+  background:linear-gradient(90deg,var(--accent),#34c759);border-radius:2px;z-index:1;
+  box-shadow:0 0 12px rgba(91,141,239,.25)}
+.nm-rl::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(52,199,89,.4),transparent);
+  animation:rf 1.5s ease-in-out infinite}
+@keyframes rf{0%{transform:translateX(-100%);opacity:0}50%{opacity:1}100%{transform:translateX(100%);opacity:0}}
+.nm-ov{position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(8,10,15,.1)0%,transparent 20%,transparent 80%,rgba(8,10,15,.3)100%)}
+.nav-i{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.nav-d{display:flex;flex-direction:column;gap:5px;flex:1}
+.nav-dn{font-size:var(--fs-body);font-weight:600;display:flex;align-items:center;gap:6px}
+.nav-dm{font-size:var(--fs-meta);color:var(--fg2);display:flex;gap:16px;font-family:'JetBrains Mono',monospace}
+.nav-dm s{display:flex;align-items:center;gap:4px}
+.btn-g{
+  background:linear-gradient(135deg,var(--accent),rgba(91,141,239,.85));
+  color:#fff;border:none;border-radius:14px;
+  padding:13px 32px;font-size:var(--fs-small);font-weight:600;
+  cursor:pointer;transition:all .2s;white-space:nowrap;
+  box-shadow:0 4px 16px rgba(91,141,239,.2);letter-spacing:.01em;
+}
+.btn-g:hover{transform:translateY(-1px) scale(1.02);box-shadow:0 6px 24px rgba(91,141,239,.3)}
+.btn-g:active{transform:scale(.97)}
+
+/* 音乐 */
+.mci{display:flex;align-items:center;gap:20px}
+.mco{width:80px;height:80px;border-radius:14px;
+  background:linear-gradient(135deg,#5b8def,#8b5cf6 40%,#c084fc);
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:32px;box-shadow:0 4px 16px rgba(91,141,239,.15)}
+.mcd{flex:1;min-width:0}
+.mct{font-size:var(--fs-body);font-weight:600;margin-bottom:2px}
+.mca{font-size:var(--fs-meta);color:var(--fg2);margin-bottom:10px}
+.mcp{display:flex;align-items:center;gap:8px}
+.prb{flex:1;height:4px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;position:relative}
+.prf{height:100%;width:30%;background:linear-gradient(90deg,var(--accent),#8b5cf6);border-radius:3px;position:relative}
+.prf::after{content:'';position:absolute;right:-1px;top:-2.5px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+.prt{font-family:'JetBrains Mono',monospace;font-size:var(--fs-tiny);color:var(--muted)}
+.mc{display:flex;gap:8px;flex-shrink:0}
+.mb{width:42px;height:42px;border-radius:50%;
+  border:1px solid var(--border-glass);
+  background:rgba(255,255,255,.02);color:var(--fg2);
+  display:grid;place-items:center;cursor:pointer;
+  font-size:15px;transition:all .2s}
+.mb:hover{background:rgba(91,141,239,.08);border-color:var(--accent);color:var(--accent)}
+.mb.pb{background:linear-gradient(135deg,var(--accent),rgba(91,141,239,.8));border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(91,141,239,.15)}
+.mb.pb:hover{transform:scale(1.05);box-shadow:0 6px 20px rgba(91,141,239,.25)}
+
+/* 空调 */
+.aci{display:flex;align-items:center;justify-content:space-between}
+.ac-t{display:flex;flex-direction:column;align-items:center}
+.ac-n{font-size:68px;font-weight:300;line-height:.9;
+  background:linear-gradient(135deg,var(--accent),#8b5cf6);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;transition:all .3s}
+.ac-u{font-size:26px;-webkit-text-fill-color:var(--muted);color:var(--muted);vertical-align:super;font-weight:400}
+.ac-l{font-size:var(--fs-tiny);color:var(--muted);margin-top:4px}
+.ac-m{display:flex;gap:16px}
+.ac-it{display:flex;flex-direction:column;align-items:center;gap:4px;opacity:.4;transition:all .3s}
+.ac-it.on{opacity:1}
+.ac-ii{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;transition:all .3s}
+.ac-it.on .ac-ii{background:var(--accent-soft);box-shadow:0 0 16px rgba(91,141,239,.06);animation:mp 2s ease-in-out infinite}
+.ac-ii.co{background:rgba(91,141,239,.1)}.ac-ii.fa{background:rgba(52,199,89,.08)}
+@keyframes mp{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.ac-il{font-size:var(--fs-tiny);color:var(--muted)}
+
+/* 天气 */
+.wci{display:flex;align-items:center;gap:20px}
+.wii{width:64px;height:64px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(255,159,10,.1),rgba(255,159,10,.04));
+  display:grid;place-items:center;font-size:34px;flex-shrink:0;
+  animation:wf2 3s ease-in-out infinite}
+@keyframes wf2{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.win{flex:1}
+.wlc{font-size:var(--fs-small);font-weight:500;color:var(--fg2);margin-bottom:2px}
+.wtr{display:flex;align-items:baseline;gap:12px;margin-top:2px}
+.wtn{font-size:40px;font-weight:300;letter-spacing:-.02em;
+  background:linear-gradient(135deg,var(--fg),var(--fg2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.wtd{font-size:var(--fs-meta);color:var(--fg2)}
+.wex{display:flex;gap:14px;margin-top:4px;font-size:var(--fs-tiny);color:var(--muted)}
+.wex s{display:flex;align-items:center;gap:3px}
+
+/* 引导卡 */
+.gc{
+  background:rgba(24,29,44,.55);backdrop-filter:blur(20px);
+  border:1px solid var(--border-glass);border-radius:20px;
+  padding:22px 28px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.4)
+}
+.gt{font-size:var(--fs-small);font-weight:500;color:var(--fg2);margin-bottom:12px}
+.gp{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.gpi{background:rgba(91,141,239,.08);color:var(--accent);
+  padding:8px 20px;border-radius:999px;font-size:var(--fs-meta);
+  border:1px solid rgba(91,141,239,.12);cursor:pointer;
+  transition:all .25s;font-weight:500}
+.gpi:hover{background:var(--accent);color:#fff;border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 16px rgba(91,141,239,.15)}
+
+/* 错误卡 */
+.ec{
+  background:rgba(24,29,44,.55);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,159,10,.1);border-radius:20px;
+  padding:18px 24px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.4)
+}
+.et{font-size:var(--fs-body);font-weight:500;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px}
+.eh{font-size:var(--fs-meta);color:var(--fg2);margin-bottom:10px}
+
+/* ─── 底部栏 ─── */
+.bottom-bar{
+  position:relative;z-index:10;flex-shrink:0;
+  padding:10px 36px 16px;
+  background:rgba(8,10,15,.5);backdrop-filter:blur(20px);
+  border-top:1px solid rgba(255,255,255,.03);
+}
+.ig{display:flex;align-items:center;gap:10px;max-width:780px;margin:0 auto}
+.if{
+  flex:1;display:flex;align-items:center;gap:10px;
+  background:rgba(24,29,44,.5);
+  border:1px solid var(--border-glass);
+  border-radius:999px;padding:8px 18px;
+  transition:all .25s;backdrop-filter:blur(8px);
+}
+.if:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,141,239,.08)}
+.if input{
+  flex:1;background:0 0;border:none;outline:none;
+  color:var(--fg);font-size:var(--fs-small);font-family:inherit;
+  letter-spacing:.01em;
+}
+.if input::placeholder{color:var(--muted);opacity:.4}
+.if .ii{color:var(--muted);font-size:14px;opacity:.4;cursor:pointer;transition:opacity .2s}
+.if .ii:hover{opacity:.8}
+
+.bm{
+  width:48px;height:48px;border-radius:50%;border:none;
+  background:linear-gradient(135deg,var(--accent),rgba(91,141,239,.8));
+  color:#fff;font-size:20px;cursor:pointer;
+  display:grid;place-items:center;
+  transition:all .25s;flex-shrink:0;
+  box-shadow:0 4px 16px rgba(91,141,239,.1);
+}
+.bm:hover{transform:scale(1.05);box-shadow:0 6px 24px rgba(91,141,239,.2)}
+.bm:active{transform:scale(.95)}
+.bm.listen{animation:ma 1s ease-in-out infinite;box-shadow:0 0 0 0 rgba(91,141,239,.35)}
+@keyframes ma{0%{box-shadow:0 0 0 0 rgba(91,141,239,.35)}100%{box-shadow:0 0 0 16px rgba(91,141,239,0)}}
+
+.bs{
+  width:40px;height:40px;border-radius:50%;
+  border:1px solid var(--border-glass);background:0 0;
+  color:var(--muted);font-size:16px;cursor:pointer;
+  display:grid;place-items:center;transition:all .2s;flex-shrink:0;
+}
+.bs:hover{background:rgba(24,29,44,.5);color:var(--fg2)}
+
+/* 驾驶遮罩 */
+.dm{position:absolute;inset:0;pointer-events:none;z-index:3;
+  opacity:0;transition:opacity .6s;
+  background:radial-gradient(ellipse at center,transparent 60%,rgba(8,10,15,.2) 100%)}
+.dm.on{opacity:1}
+
+::-webkit-scrollbar{width:0;height:0}
+</style>
+</head>
+<body>
+
+<div class="app-frame" id="app">
+  <div class="ambient"><div class="o"></div><div class="o"></div></div>
+  <div class="ambient-grid"></div>
+  <div class="dm" id="dm"></div>
+
+  <!-- 状态栏 -->
+  <div class="status-bar">
+    <div class="status-left">
+      <span class="status-badge dnd" id="dndB">🔇 免打扰</span>
+      <span class="status-badge driving" id="drvB" style="display:none">🚗 驾驶模式</span>
+    </div>
+    <div class="status-right">
+      <div class="status-signal"><s></s><s></s><s></s><s></s></div>
+      <span class="status-time" id="clock">10:45</span>
+    </div>
+  </div>
+
+  <!-- 主区域 -->
+  <div class="main-area" id="mainArea">
+    <!-- 小狼 -->
+    <div class="wolf-section" id="wolfSec">
+      <div class="wolf-wrap">
+        <div class="wolf-glow" id="wolfGlow"></div>
+        <svg class="wolf-svg" id="wolfSvg" viewBox="0 0 240 260" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="55%"><stop offset="0%" stop-color="#e8edf2"/><stop offset="55%" stop-color="#cdd5df"/><stop offset="100%" stop-color="#b4becb"/></radialGradient>
+    <radialGradient id="by" cx="50%" cy="60%" r="40%"><stop offset="0%" stop-color="#f5f7f9"/><stop offset="100%" stop-color="#dce2e9"/></radialGradient>
+    <linearGradient id="el" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#cdd5df"/><stop offset="100%" stop-color="#a8b3c2"/></linearGradient>
+    <linearGradient id="er" x1="100%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#cdd5df"/><stop offset="100%" stop-color="#a8b3c2"/></linearGradient>
+    <linearGradient id="ei" x1="50%" y1="0%" x2="50%" y2="100%"><stop offset="0%" stop-color="#f5b8c4"/><stop offset="100%" stop-color="#e8909e"/></linearGradient>
+    <radialGradient id="ir" cx="40%" cy="35%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="40%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#1d4ed8"/></radialGradient>
+    <radialGradient id="es" cx="30%" cy="30%"><stop offset="0%" stop-color="#fff" stop-opacity=".95"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="ng" cx="45%" cy="40%"><stop offset="0%" stop-color="#4b5563"/><stop offset="100%" stop-color="#1f2937"/></radialGradient>
+    <radialGradient id="bl" cx="50%" cy="50%"><stop offset="0%" stop-color="#f5a8b8" stop-opacity=".25"/><stop offset="100%" stop-color="#f5a8b8" stop-opacity="0"/></radialGradient>
+    <linearGradient id="tg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#d5dde6"/><stop offset="100%" stop-color="#b0bbc9"/></linearGradient>
+    <filter id="sh"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity=".15"/></filter>
+  </defs>
+  <g class="wolf-tail" transform-origin="190 200">
+    <path d="M 175 185 Q 205 170 218 178 Q 230 186 220 198 Q 208 210 185 200" fill="url(#tg)" stroke="#9aa6b5" stroke-width=".8" opacity=".8"/>
+    <path d="M 218 178 Q 225 182 222 190 Q 218 196 212 194" fill="#f0f3f7" opacity=".6"/>
+  </g>
+  <ellipse cx="120" cy="190" rx="62" ry="56" fill="url(#bg)" filter="url(#sh)" opacity=".6"/>
+  <g filter="url(#sh)">
+    <ellipse cx="120" cy="112" rx="56" ry="54" fill="url(#bg)"/>
+    <path d="M 70 112 Q 56 108 60 98 Q 64 86 78 92" fill="url(#bg)"/>
+    <path d="M 170 112 Q 184 108 180 98 Q 176 86 162 92" fill="url(#bg)"/>
+    <path d="M 85 145 Q 120 160 155 145 Q 120 168 85 145Z" fill="url(#by)"/>
+  </g>
+  <g class="wolf-ear left" transform-origin="85 65">
+    <path d="M 80 68 Q 75 48 68 38 Q 62 32 72 36 L 88 56 Q 85 62 82 68Z" fill="url(#el)" stroke="#a0acbb" stroke-width=".5"/>
+    <path d="M 79 65 Q 74 50 70 42 Q 66 38 73 42 L 85 56 Q 82 62 80 66Z" fill="url(#ei)"/>
+  </g>
+  <g class="wolf-ear right" transform-origin="155 65">
+    <path d="M 160 68 Q 165 48 172 38 Q 178 32 168 36 L 152 56 Q 155 62 158 68Z" fill="url(#er)" stroke="#a0acbb" stroke-width=".5"/>
+    <path d="M 161 65 Q 166 50 170 42 Q 174 38 167 42 L 155 56 Q 158 62 160 66Z" fill="url(#ei)"/>
+  </g>
+  <path d="M 105 65 Q 120 60 135 65" fill="none" stroke="#b8c3d0" stroke-width="1.5" opacity=".3"/>
+  <path d="M 108 68 Q 120 64 132 68" fill="none" stroke="#b8c3d0" stroke-width="1" opacity=".2"/>
+  <ellipse cx="75" cy="118" rx="14" ry="10" fill="#dce2e9" opacity=".7"/>
+  <ellipse cx="72" cy="108" rx="11" ry="8" fill="#dce2e9" opacity=".5"/>
+  <path d="M 70 130 Q 60 128 62 118 Q 64 108 74 114" fill="#dce2e9" opacity=".6"/>
+  <ellipse cx="165" cy="118" rx="14" ry="10" fill="#dce2e9" opacity=".7"/>
+  <ellipse cx="168" cy="108" rx="11" ry="8" fill="#dce2e9" opacity=".5"/>
+  <path d="M 170 130 Q 180 128 178 118 Q 176 108 166 114" fill="#dce2e9" opacity=".6"/>
+  <ellipse cx="120" cy="122" rx="34" ry="26" fill="#f0f3f7" opacity=".7"/>
+  <g class="wolf-eyes wolf-blink" style="transform-origin:104px 104px">
+    <ellipse cx="104" cy="104" rx="13" ry="14" fill="#fff" opacity=".95"/>
+    <path d="M 91 98 Q 104 88 117 98 Q 104 94 91 98Z" fill="#9aa6b5" opacity=".3"/>
+    <circle cx="105" cy="106" r="9" fill="url(#ir)"/>
+    <ellipse cx="105" cy="107" rx="5" ry="7" fill="#0f172a"/>
+    <circle cx="101" cy="101" r="4" fill="url(#es)"/><circle cx="101" cy="101" r="2" fill="#fff" opacity=".9"/>
+    <circle cx="108" cy="103" r="2" fill="#fff" opacity=".35"/>
+    <path d="M 90 100 Q 104 86 118 100" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 95 116 Q 104 120 113 116" fill="none" stroke="#94a3b8" stroke-width="1" stroke-linecap="round" opacity=".4"/>
+  </g>
+  <g class="wolf-eyes wolf-blink" style="transform-origin:136px 104px">
+    <ellipse cx="136" cy="104" rx="13" ry="14" fill="#fff" opacity=".95"/>
+    <path d="M 123 98 Q 136 88 149 98 Q 136 94 123 98Z" fill="#9aa6b5" opacity=".3"/>
+    <circle cx="135" cy="106" r="9" fill="url(#ir)"/>
+    <ellipse cx="135" cy="107" rx="5" ry="7" fill="#0f172a"/>
+    <circle cx="131" cy="101" r="4" fill="url(#es)"/><circle cx="131" cy="101" r="2" fill="#fff" opacity=".9"/>
+    <circle cx="138" cy="103" r="2" fill="#fff" opacity=".35"/>
+    <path d="M 122 100 Q 136 86 150 100" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 127 116 Q 136 120 145 116" fill="none" stroke="#94a3b8" stroke-width="1" stroke-linecap="round" opacity=".4"/>
+  </g>
+  <path class="wolf-brow left" d="M 92 88 Q 100 82 110 84" fill="none" stroke="#475569" stroke-width="2.5" stroke-linecap="round" opacity=".6"/>
+  <path class="wolf-brow right" d="M 130 84 Q 140 82 148 88" fill="none" stroke="#475569" stroke-width="2.5" stroke-linecap="round" opacity=".6"/>
+  <ellipse cx="120" cy="119" rx="7" ry="5.5" fill="url(#ng)"/>
+  <ellipse cx="118" cy="117" rx="2.5" ry="1.8" fill="#fff" opacity=".15"/>
+  <ellipse cx="117" cy="121" rx="1.5" ry="1" fill="#0f172a" opacity=".4"/>
+  <ellipse cx="123" cy="121" rx="1.5" ry="1" fill="#0f172a" opacity=".4"/>
+  <path class="wolf-mouth-closed" d="M 110 126 Q 120 133 130 126" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" opacity=".6"/>
+  <path class="wolf-mouth-open" d="M 108 126 Q 120 144 132 126" fill="#1e293b" stroke="#475569" stroke-width="1.5" stroke-linecap="round" opacity="0"/>
+  <ellipse class="wolf-tongue" cx="120" cy="135" rx="5" ry="4" fill="#f08a9e" opacity="0"/>
+  <ellipse cx="90" cy="117" rx="12" ry="7" fill="url(#bl)"/>
+  <ellipse cx="150" cy="117" rx="12" ry="7" fill="url(#bl)"/>
+</svg>
+      </div>
+      <div class="wolf-status" id="wolfSt">你好！试试对我说：导航去公司</div>
+      <div class="wave-area" id="waveA">
+        <div class="wave-b"></div><div class="wave-b"></div><div class="wave-b"></div>
+        <div class="wave-b"></div><div class="wave-b"></div><div class="wave-b"></div><div class="wave-b"></div>
+      </div>
+    </div>
+
+    <div class="dialog-area" id="dialogA"></div>
+  </div>
+
+<div class="bottom-bar">
+    <div class="ig">
+      <div class="if" id="inputField">
+        <input type="text" id="txtIn" placeholder="输入指令，如：导航去公司" autocomplete="off">
+        <span class="ii">⌨️</span>
+      </div>
+      <button class="bm" id="micBtn" title="语音输入">🎤</button>
+      <button class="bs" id="setBtn" title="设置">⚙️</button>
+    </div>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+const DOM = {
+  app: $('app'), wolfSvg: $('wolfSvg'), wolfSec: $('wolfSec'),
+  wolfGlow: $('wolfGlow'), wolfSt: $('wolfSt'), waveA: $('waveA'),
+  dialogA: $('dialogA'), txtIn: $('txtIn'), micBtn: $('micBtn'),
+  dndB: $('dndB'), drvB: $('drvB'), dm: $('dm'), clock: $('clock'),
+};
+
+let st = 'idle', drv = false, lstn = false, ltm = null, cnt = 0;
+
+// 时钟
+function tick(){
+  const n=new Date();
+  DOM.clock.textContent=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+}
+tick(); setInterval(tick,30000);
+
+// 驾驶模式（双击免打扰切换）
+DOM.dndB.addEventListener('dblclick',()=>{
+  drv=!drv;
+  DOM.app.classList.toggle('driving-mode',drv);
+  DOM.dm.classList.toggle('on',drv);
+  DOM.drvB.style.display=drv?'flex':'none';
+  DOM.dndB.style.opacity=drv?'1':'.7';
+});
+
+// ─── 小狼状态 ───
+function wState(s,label){
+  st=s;
+  DOM.wolfSvg.className='wolf-svg';
+  DOM.wolfGlow.className='wolf-glow';
+  DOM.waveA.classList.remove('on');
+  DOM.wolfSt.className='wolf-status';
+  DOM.micBtn.classList.remove('listen');
+  if(label) DOM.wolfSt.textContent=label;
+
+  switch(s){
+    case 'idle':
+      DOM.wolfSt.textContent=label||'你好！试试对我说：导航去公司';
+      DOM.wolfSt.classList.add('hint');
+      break;
+    case 'listen':
+      DOM.wolfSvg.classList.add('listen');
+      DOM.wolfGlow.classList.add('on','listen');
+      DOM.wolfSt.textContent=label||'🎤 请说话…';
+      DOM.wolfSt.classList.add('on');
+      DOM.waveA.classList.add('on');
+      DOM.micBtn.classList.add('listen');
+      break;
+    case 'think':
+      DOM.wolfSvg.classList.add('think');
+      DOM.wolfGlow.classList.add('on');
+      DOM.wolfSt.textContent=label||'🤔 正在思考…';
+      DOM.wolfSt.classList.add('on');
+      break;
+    case 'speak':
+      DOM.wolfSvg.classList.add('speak');
+      DOM.wolfGlow.classList.add('on','speak');
+      DOM.wolfSt.textContent=label||'✨';
+      DOM.wolfSt.classList.add('on');
+      break;
+    case 'confused':
+      DOM.wolfSvg.classList.add('confused');
+      DOM.wolfSt.textContent=label||'😕 没听清楚呢';
+      setTimeout(()=>{if(st==='confused')DOM.wolfSvg.classList.remove('confused')},1000);
+      break;
+  }
+}
+
+// ─── 对话引擎 ───
+const SCENES={
+  nav:{kw:['导航','公司','朝阳','去','到'],rp:'好的，已为您规划前往朝阳公园的路线！',cd:'nav'},
+  music:{kw:['音乐','播放','周杰伦','晴天','歌','听'],rp:'为您播放周杰伦的《晴天》',cd:'music'},
+  ac:{kw:['空调','温度','冷','热','暖','调'],rp:'好的，已为您将空调调节至 24°C',cd:'ac'},
+  weather:{kw:['天气','下雨','晴','雪','温','湿度'],rp:'北京今天天气晴朗，温度 22°C，适合出行',cd:'weather'},
+  hi:{kw:['你好','嗨','hi','hello','在吗'],rp:'你好呀！我是小狼助手，随时为你服务 🐺',cd:null},
+  bye:{kw:['再见','拜拜','bye','回头'],rp:'好的，路上小心～需要帮忙随时叫我！',cd:null},
+};
+
+function detect(t){
+  const s=t.toLowerCase();
+  for(const[k,v]of Object.entries(SCENES))
+    if(v.kw.some(w=>s.includes(w))) return k;
+  return null;
+}
+
+function addMsg(role,text,card){
+  const el=document.createElement('div');
+  el.className=`msg ${role}`;
+  const av=document.createElement('div');
+  av.className=`msg-av ${role==='assistant'?'as':'usr'}`;
+  av.textContent=role==='assistant'?'🐺':'👤';
+  const b=document.createElement('div');
+  b.className='msg-b';
+  b.textContent=text;
+  el.appendChild(av);el.appendChild(b);
+  DOM.dialogA.appendChild(el);
+  DOM.dialogA.scrollTop=DOM.dialogA.scrollHeight;
+  if(role==='assistant'&&card) setTimeout(()=>addCard(card),350);
+}
+
+function showTyping(){
+  if(document.getElementById('typing'))return;
+  const el=document.createElement('div');el.className='typing';el.id='typing';
+  el.innerHTML='<div class="msg-av as">🐺</div><div class="msg-b"><span class="typing-d"></span><span class="typing-d"></span><span class="typing-d"></span></div>';
+  DOM.dialogA.appendChild(el);
+  DOM.dialogA.scrollTop=DOM.dialogA.scrollHeight;
+}
+function hideTyping(){
+  const el=document.getElementById('typing');
+  if(el)el.remove();
+}
+
+function addCard(type){
+  if(DOM.dialogA.querySelector(`.card-${type}`))return;
+  const w=document.createElement('div');
+  w.className='msg assistant';
+  w.innerHTML=`<div class="msg-av as">🐺</div><div class="msg-b card-r">${cardHTML(type)}</div>`;
+  DOM.dialogA.appendChild(w);
+  DOM.dialogA.scrollTop=DOM.dialogA.scrollHeight;
+  DOM.wolfSec.classList.add('compact');
+  if(type==='ac')animTemp();
+}
+
+function cardHTML(t){
+  switch(t){
+    case 'nav':return `<div class="sc"><div class="nm"><div class="nm-r h"></div><div class="nm-r h"></div><div class="nm-r h"></div><div class="nm-r v"></div><div class="nm-r v"></div><div class="nm-r v"></div><div class="nm-ms s"></div><div class="nm-ms e"></div><div class="nm-rl"></div><div class="nm-ov"></div></div><div class="nav-i"><div class="nav-d"><div class="nav-dn">📍 朝阳公园</div><div class="nav-dm"><s>⏱ 预计 15 分钟</s><s>📏 5.2 km</s><s>🕐 到达 10:45</s></div></div><button class="btn-g" onclick="alert('🚗 开始导航！正在为你导航到朝阳公园…')">出发 🚗</button></div></div>`;
+    case 'music':return `<div class="sc"><div class="mci"><div class="mco">🎵</div><div class="mcd"><div class="mct">晴天</div><div class="mca">周杰伦</div><div class="mcp"><span class="prt">1:24</span><div class="prb"><div class="prf"></div></div><span class="prt">3:45</span></div></div><div class="mc"><button class="mb" onclick="addMsg('user','⏮ 上一首')">⏮</button><button class="mb pb" onclick="addMsg('user','⏸ 暂停')">⏸</button><button class="mb" onclick="addMsg('user','⏭ 下一首')">⏭</button></div></div></div>`;
+    case 'ac':return `<div class="sc"><div class="aci"><div class="ac-t"><div class="ac-n" id="acN">24<span class="ac-u">°C</span></div><div class="ac-l">已设为 24°C</div></div><div class="ac-m"><div class="ac-it on"><div class="ac-ii co">❄️</div><span class="ac-il">制冷</span></div><div class="ac-it on"><div class="ac-ii fa">💨</div><span class="ac-il">风量 3 档</span></div><div class="ac-it"><div class="ac-ii">🔄</div><span class="ac-il">内循环</span></div></div></div></div>`;
+    case 'weather':return `<div class="sc"><div class="wci"><div class="wii">☀️</div><div class="win"><div class="wlc">📍 北京 · 今天</div><div class="wtr"><span class="wtn">22°</span><span class="wtd">晴朗 · 适合出行</span></div><div class="wex"><s>💧 湿度 45%</s><s>🌬 风力 3 级</s><s>☀️ 紫外线 中等</s></div></div></div></div>`;
+    default:return'';
+  }
+}
+
+function animTemp(){
+  let t=22, tar=24;
+  const el=document.getElementById('acN');
+  if(!el)return;
+  const tm=setInterval(()=>{
+    if(t>=tar){clearInterval(tm);return;}
+    t++;
+    el.innerHTML=t+'<span class="ac-u">°C</span>';
+  },160);
+}
+
+function showGuide(){
+  if(cnt>0)return;
+  const w=document.createElement('div');w.className='msg assistant';
+  w.innerHTML=`<div class="msg-av as">🐺</div><div class="msg-b card-r"><div class="gc"><div class="gt">💡 试试对我说</div><div class="gp"><span class="gpi" onclick="qGuide('nav')">导航去公司</span><span class="gpi" onclick="qGuide('music')">播放周杰伦的歌</span><span class="gpi" onclick="qGuide('ac')">空调调到 24 度</span><span class="gpi" onclick="qGuide('weather')">今天天气怎么样</span></div></div></div>`;
+  DOM.dialogA.appendChild(w);
+}
+
+// ─── 核心流程 ───
+function handleInput(text){
+  if(!text.trim())return;
+  cnt++;
+  addMsg('user',text);
+  const int=detect(text);
+  const cmd=int&&['nav','music','ac','weather'].includes(int);
+  const chat=int&&['hi','bye'].includes(int);
+
+  if(cmd){
+    wState('think');
+    hideTyping();showTyping();
+    setTimeout(()=>{
+      hideTyping();
+      wState('speak',SCENES[int].rp);
+      addMsg('assistant',SCENES[int].rp,int);
+      setTimeout(()=>{if(st==='speak')wState('idle')},1200);
+    },1000+Math.random()*600);
+  }else if(chat){
+    wState('think');
+    setTimeout(()=>{
+      wState('speak');
+      addMsg('assistant',SCENES[int].rp);
+      setTimeout(()=>{if(st==='speak')wState('idle')},1200);
+    },500);
+  }else{
+    wState('think');
+    setTimeout(()=>{
+      wState('confused','😕 暂时不理解呢，试试说：导航去公司 / 播放音乐 / 打开空调');
+      addMsg('assistant','😕 暂时不理解呢，试试这些指令：');
+      const w=document.createElement('div');w.className='msg assistant';
+      w.innerHTML=`<div class="msg-av as">🐺</div><div class="msg-b card-r"><div class="gc" style="background:rgba(255,159,10,.04);border-color:rgba(255,159,10,.1)"><div class="gp"><span class="gpi" onclick="qGuide('nav')">导航去公司</span><span class="gpi" onclick="qGuide('music')">播放周杰伦</span><span class="gpi" onclick="qGuide('ac')">打开空调</span><span class="gpi" onclick="qGuide('weather')">今天天气</span></div></div></div>`;
+      DOM.dialogA.appendChild(w);
+      setTimeout(()=>wState('idle'),1500);
+    },600);
+  }
+  DOM.wolfSec.classList.add('compact');
+}
+
+function qGuide(t){
+  DOM.txtIn.value='';
+  DOM.txtIn.blur();
+  const lb={nav:'导航去公司',music:'播放周杰伦的歌',ac:'空调调到 24 度',weather:'今天天气怎么样'};
+  if(lb[t])handleInput(lb[t]);
+}
+
+// ─── 文字输入 ───
+DOM.txtIn.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&DOM.txtIn.value.trim()){
+    const t=DOM.txtIn.value.trim();
+    DOM.txtIn.value='';
+    handleInput(t);
+  }
+});
+
+// ─── 麦克风 ───
+DOM.micBtn.addEventListener('click',()=>{
+  if(st==='listen'){
+    clearTimeout(ltm);
+    const cmds=['导航去公司','播放周杰伦的歌','空调调到 24 度','今天天气怎么样'];
+    handleInput(cmds[Math.floor(Math.random()*cmds.length)]);
+  }else{
+    wState('listen');
+    DOM.wolfSec.classList.add('compact');
+    ltm=setTimeout(()=>{
+      if(st==='listen'){
+        wState('idle','⏱ 没有听到声音，试试输入文字');
+        addMsg('assistant','⏱ 没有听到声音，可以点击麦克风重试，或输入文字指令');
+      }
+    },8000);
+    const d=3000+Math.random()*2000;
+    setTimeout(()=>{
+      if(st==='listen'){
+        clearTimeout(ltm);
+        const cmds=['导航去公司','播放周杰伦的歌','空调调到 24 度','今天天气怎么样'];
+        handleInput(cmds[Math.floor(Math.random()*cmds.length)]);
+      }
+    },d);
+  }
+});
+
+// ─── 初始化 ───
+wState('idle');
+showGuide();
+setTimeout(()=>DOM.txtIn.focus(),500);
+</script>
+</body>
+</html>
